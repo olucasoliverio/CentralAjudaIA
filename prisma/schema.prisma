@@ -1,0 +1,36 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+model Article {
+  id          String   @id @default(uuid())
+  freshdeskId String   @unique
+  title       String
+  category    String?
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  description String   @db.Text
+  chunks      Chunk[]
+
+  @@map("articles")
+}
+
+model Chunk {
+  id         String   @id @default(uuid())
+  articleId  String
+  content    String   @db.Text
+  embedding  Unsupported("vector(3072)")?
+  tokenCount Int?
+  createdAt  DateTime @default(now())
+
+  article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@map("chunks")
+}
