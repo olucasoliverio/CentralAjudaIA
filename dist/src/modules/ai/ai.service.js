@@ -65,7 +65,7 @@ let AiService = AiService_1 = class AiService {
     }
     async updateArticle(currentContent, whatToChange) {
         const model = this.gemini.getGenerativeModel({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-2.5-flash',
             systemInstruction: prompts_1.UPDATE_ARTICLE_SYSTEM_PROMPT,
         });
         const result = await model.generateContent({

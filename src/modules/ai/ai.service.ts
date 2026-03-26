@@ -98,9 +98,10 @@ export class AiService {
     whatToChange: string,
   ): Promise<UpdateArticleResult> {
     const model = this.gemini.getGenerativeModel({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       systemInstruction: UPDATE_ARTICLE_SYSTEM_PROMPT,
     });
+
 
     const result = await model.generateContent({
       contents: [

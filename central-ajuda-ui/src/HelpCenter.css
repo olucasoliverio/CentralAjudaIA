@@ -1,0 +1,84 @@
+.help-center-preview {
+  background-color: #ffffff;
+  color: #333333;
+  padding: 40px;
+  border-radius: 8px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 0 auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.help-center-preview h1 {
+  font-size: 2.2rem;
+  color: #1a1a1a;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 12px;
+}
+
+.help-center-preview h2, 
+.help-center-preview h3, 
+.help-center-preview h4 {
+  color: #1a1a1a;
+  margin-top: 32px;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.help-center-preview p {
+  margin-bottom: 16px;
+  color: #444444;
+}
+
+.help-center-preview strong {
+  color: #000000;
+  font-weight: 700;
+}
+
+.help-center-preview a {
+  color: #3B82F6;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.help-center-preview a:hover {
+  text-decoration: underline;
+}
+
+.help-center-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 20px 0;
+  display: block;
+}
+
+.help-center-preview ul, 
+.help-center-preview ol {
+  margin-bottom: 16px;
+  padding-left: 24px;
+}
+
+.help-center-preview li {
+  margin-bottom: 8px;
+}
+
+/* Next Fit Separator (Asterisks) Styles */
+.help-center-preview .separator {
+  color: #94A3B8;
+  letter-spacing: 2px;
+  text-align: center;
+  margin: 32px 0;
+}
+
+/* Custom Highlight block for those massive asterisks in golden-articles */
+.help-center-preview .highlight-block {
+  background-color: #f8fafc;
+  border-left: 4px solid #3B82F6;
+  padding: 16px;
+  margin: 24px 0;
+  font-style: italic;
+  color: #475569;
+}
