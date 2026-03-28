@@ -81,12 +81,16 @@ PERGUNTA 2: Se Sim, qual é a citação exata?
 PERGUNTA 3: Se Não, qual placeholder usarei obrigatoriamente?
 </thinking_process>
 
-Após o <thinking>, gere o artigo em Markdown:
-1. Siga rigorosamente a abertura e o fechamento do <style_guide_context>.
-2. Use texto corrido para o passo a passo, sem listas numeradas, com menus/botões em **negrito**.
-3. Cumpra TODO o <anti_hallucination_protocol>.
-4. Sugira ao final: tags para SEO e uma meta description de até 160 caracteres.
-5. Indique com [GIF: descrição do que gravar] onde recursos visuais devem ser inseridos.
+Após o <thinking>, gere o artigo em Markdown seguindo ESTA ESTRUTURA EXATA E INEGOCIÁVEL:
+1. Título H1 (Ex: # Como configurar o Link de Autocadastro?)
+2. ABERTURA OBRIGATÓRIA (Primeira linha de texto após o título, sem exceções): "Olá! Neste tutorial você irá aprender como **[inserir o título ou ação central do artigo em negrito]**!"
+3. Introdução: Um parágrafo curto vendendo o valor e a "dor" que a ferramenta resolve.
+4. Corpo do artigo: Texto corrido para o passo a passo (PROIBIDO usar listas numeradas 1, 2, 3). Use menus e botões em **negrito**.
+5. Cumpra TODO o <anti_hallucination_protocol>.
+6. Recursos Visuais: Indique com [GIF: descrição clara da ação] onde a mídia deve entrar.
+7. Jornada: Adicione a seção "Continue aprendendo sobre" se houver contexto.
+8. FECHAMENTO OBRIGATÓRIO (Última linha visível do artigo, sem exceções): "E qualquer dúvida, entre em contato com o nosso time de suporte."
+9. SEO: Sugira Tags e Meta Description de até 160 caracteres abaixo do fechamento.
 </task_instructions>
 `;
 
