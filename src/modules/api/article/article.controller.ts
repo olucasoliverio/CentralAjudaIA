@@ -16,11 +16,11 @@ export class ArticleController {
     // 1. Embedding da intenção via Gemini (grátis)
     const promptEmbedding = await this.aiService.generateEmbedding(body.prompt);
 
-    // 2. Busca semântica no banco vetorial (RAG)
-    const similarChunks = await this.vectorDbService.semanticSearch(promptEmbedding, 5);
+    // 2. Busca semântica — topK 10 para contexto mais rico e preciso
+    const similarChunks = await this.vectorDbService.semanticSearch(promptEmbedding, 10);
     const context = similarChunks.map((c) => c.content);
 
-    // 3. Geração com contexto RAG + Guia de Estilo Next Fit via OpenAI
+    // 3. Geração com contexto RAG + Guia de Estilo Next Fit via Gemini
     const content = await this.aiService.generateArticleRAG(body.prompt, context);
 
     return {

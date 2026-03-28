@@ -97,7 +97,7 @@ export class AiService {
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.7 },
+      generationConfig: { temperature: 0.2 },
     });
 
     const text = result.response.text() || '';
