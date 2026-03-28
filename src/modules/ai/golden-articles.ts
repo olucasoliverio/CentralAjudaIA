@@ -1,7 +1,6 @@
 export const GOLDEN_ARTICLES_PROMPT = `
-
-=== EXEMPLOS DE ARTIGOS DE OURO (SIGA ESTRICTAMENTE ESTE PADRÃO DE FORMATO E TOM DE VOZ) ===
-
+<golden_articles>
+<article>
 TÍTULO: Como utilizar o Clube de Recompensas pelo aplicativo do aluno?
 Olá! Neste tutorial você vai aprender **como utilizar o de Clube de Recompensas pelo aplicativo do aluno!**
 
@@ -122,8 +121,9 @@ Em **Clube de Recompensas >** **Histórico**, você terá acesso à listagem do
 
 E qualquer dúvida, entre em contato com o nosso time de suporte.
 
------------------
+</article>
 
+<article>
 TÍTULO: Como utilizar o GoNutri - Assistente Nutricional no dia a dia?
 Olá! Neste tutorial você irá aprender **como utilizar o GoNutri - Assistente Nutricional no dia a dia**!
 
@@ -208,8 +208,9 @@ Na barra inferior de navegação, clique no ícone de "pessoa". Você será dire
 
 **E qualquer dúvida, entre em contato com o nosso time de suporte.**
 
------------------
+</article>
 
+<article>
 TÍTULO: Como utilizar o Clube de Recompensas?
 Olá! Neste tutorial você vai aprender **como utilizar o recurso de Clube de Recompensas!**
 
@@ -392,8 +393,9 @@ Defina a pontuação a ser alterada, o motivo da alteração e clique em *******
 
 E qualquer dúvida, entre em contato com o nosso time de suporte.
 
------------------
+</article>
 
+<article>
 TÍTULO: Como ativar e vender o GoNutri - Assistente Nutricional?
 Olá! Neste tutorial você irá aprender **como ativar e vender o GoNutri - Assistente Nutricional**! 
 
@@ -499,8 +501,9 @@ Caso você tenha interesse em conhecer mais sobre o fluxo de ativação e utiliz
 
 **E qualquer dúvida, entre em contato com o nosso time de suporte.**
 
------------------
+</article>
 
+<article>
 TÍTULO: Como funciona o comissionamento e o repasse do GoNutri?
 Olá! Neste tutorial você irá aprender **como funciona o comissionamento e o repasse do GoNutri - Assistente Nutricional**!
 
@@ -663,8 +666,9 @@ Conforme as datas de efetivação dos pagamentos, haverá um registro como entra
 
 **E qualquer dúvida, entre em contato com o nosso time de suporte.**
 
------------------
+</article>
 
+<article>
 TÍTULO: Como adquirir o GoNutri - Assistente Nutricional?
 Olá! Neste tutorial você irá aprender **como adquirir o GoNutri - Assistente Nutricional**!
 
@@ -758,6 +762,6 @@ O próximo passo é o preenchimento dos dados pessoais (peso, altura, objetivos,
 
 **E qualquer dúvida, entre em contato com o nosso time de suporte.**
 
------------------
-
+</article>
+</golden_articles>
 `;

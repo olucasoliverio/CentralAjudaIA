@@ -7,6 +7,7 @@ import {
   UPDATE_ARTICLE_SYSTEM_PROMPT,
   QUALITY_SCORE_PROMPT,
   ANALYZE_IMPACT_SYSTEM_PROMPT,
+  VERIFY_IMPACT_SYSTEM_PROMPT,
 } from './prompts';
 
 export interface AnalyzeImpactResult {
@@ -15,6 +16,7 @@ export interface AnalyzeImpactResult {
     title: string;
     impact: 'ALTO' | 'MEDIO' | 'BAIXO';
     reason: string;
+    affected_excerpt?: string;
     suggested_update_instruction: string;
   }[];
   summary: string;
@@ -25,6 +27,14 @@ export interface UpdateArticleResult {
   changes_summary: string[];
   style_violations_fixed: string[];
   assumptions: string[];
+}
+
+export interface VerifyImpactResult {
+  confirmed: boolean;
+  confidence: 'ALTA' | 'MEDIA' | 'BAIXA';
+  reason: string;
+  affected_excerpt: string | null;
+  suggested_update_instruction: string | null;
 }
 
 @Injectable()
@@ -89,7 +99,35 @@ export class AiService {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.7 },
     });
-    return result.response.text() || '';
+
+    const text = result.response.text() || '';
+    return this.cleanThinkingTags(text);
+  }
+
+  // Helper para limpar tags de pensamento e extrair apenas o conteúdo final
+  private cleanThinkingTags(text: string): string {
+    const thinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
+    if (thinkingMatch) {
+      this.logger.debug(`AI Thought Process: ${thinkingMatch[1].trim()}`);
+    }
+    return text.replace(/<thinking>([\s\S]*?)<\/thinking>/, '').trim();
+  }
+
+  // Helper para extrair JSON de respostas que podem conter tags ou markdown
+  private extractJson<T>(text: string): T {
+    this.cleanThinkingTags(text); // Loga o pensamento no debug
+    const cleanText = text.replace(/<thinking>([\s\S]*?)<\/thinking>/, '').trim();
+
+    const jsonMatch = cleanText.match(/```json\s*([\s\S]*?)\s*```/) || cleanText.match(/{[\s\S]*}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[1] || jsonMatch[0]) as T;
+      } catch (e) {
+        this.logger.error(`Erro ao parsear JSON da IA: ${e.message}`, cleanText);
+        throw e;
+      }
+    }
+    throw new Error('Não foi possível encontrar um JSON válido na resposta da IA.');
   }
 
   // ─── REVISÃO DE ARTIGO VIA GEMINI ──────────────────────────────────
@@ -102,7 +140,6 @@ export class AiService {
       systemInstruction: UPDATE_ARTICLE_SYSTEM_PROMPT,
     });
 
-
     const result = await model.generateContent({
       contents: [
         {
@@ -112,7 +149,6 @@ export class AiService {
       ],
       generationConfig: {
         temperature: 0.2,
-        responseMimeType: 'application/json',
       },
     });
 
@@ -120,7 +156,7 @@ export class AiService {
     if (!content) {
       return { revised_content: '', changes_summary: [], style_violations_fixed: [], assumptions: [] };
     }
-    return JSON.parse(content) as UpdateArticleResult;
+    return this.extractJson<UpdateArticleResult>(content);
   }
 
   // ─── ANÁLISE DE ESTILO / PADRÃO ───────────────────────────────────
@@ -138,11 +174,10 @@ export class AiService {
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: 'Analise os artigos do contexto e forneça o JSON de avaliação.' }] }],
-      generationConfig: { responseMimeType: 'application/json' },
     });
-    
+
     const content = result.response.text();
-    return content ? JSON.parse(content) : {};
+    return content ? this.extractJson<any>(content) : {};
   }
 
   // ─── QUALITY SCORING ───────────────────────────────────────────────
@@ -156,14 +191,13 @@ export class AiService {
 
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: 'Avalie este artigo de acordo com as instruções fornecidas e retorne um JSON.' }] }],
-      generationConfig: { responseMimeType: 'application/json' },
     });
-    
+
     const content = result.response.text();
-    return content ? JSON.parse(content) : {};
+    return content ? this.extractJson<any>(content) : {};
   }
 
-  // ─── ANÁLISE DE IMPACTO DE PRODUTO ─────────────────────────────────
+  // ─── ANÁLISE DE IMPACTO DE PRODUTO (Passo 1 — busca semântica) ─────
   async analyzeImpact(
     productMessage: string,
     articlesContext: string,
@@ -178,17 +212,54 @@ export class AiService {
     });
 
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: 'Cruze as informações e me retorne o JSON de impacto.' }] }],
-      generationConfig: { 
+      contents: [{ role: 'user', parts: [{ text: 'Cruze as informações e retorne o JSON de impacto. Seja conservador: só inclua artigos com conteúdo diretamente desatualizado.' }] }],
+      generationConfig: {
         temperature: 0.1,
-        responseMimeType: 'application/json' 
       },
     });
-    
+
     const content = result.response.text();
     if (!content) {
-       return { affected_articles: [], summary: 'Não foi possível analisar o impacto' };
+      return { affected_articles: [], summary: 'Não foi possível analisar o impacto' };
     }
-    return JSON.parse(content) as AnalyzeImpactResult;
+    return this.extractJson<AnalyzeImpactResult>(content);
+  }
+
+  // ─── VERIFICAÇÃO DE IMPACTO (Passo 2 — artigo completo) ────────────
+  async verifyArticleImpact(
+    productMessage: string,
+    affectedExcerpt: string,
+    preliminaryReason: string,
+    fullArticleContent: string,
+  ): Promise<VerifyImpactResult> {
+    const systemInstruction = VERIFY_IMPACT_SYSTEM_PROMPT
+      .replace('{productMessage}', productMessage)
+      .replace('{affectedExcerpt}', affectedExcerpt)
+      .replace('{preliminaryReason}', preliminaryReason)
+      .replace('{fullArticleContent}', fullArticleContent);
+
+    const model = this.gemini.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction,
+    });
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: 'Confirme ou descarte o impacto lendo o artigo completo. Seja rigoroso.' }] }],
+      generationConfig: {
+        temperature: 0.1,
+      },
+    });
+
+    const content = result.response.text();
+    if (!content) {
+      return {
+        confirmed: false,
+        confidence: 'BAIXA',
+        reason: 'Não foi possível verificar o impacto',
+        affected_excerpt: null,
+        suggested_update_instruction: null,
+      };
+    }
+    return this.extractJson<VerifyImpactResult>(content);
   }
 }

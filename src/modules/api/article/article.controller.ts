@@ -9,7 +9,7 @@ export class ArticleController {
     private readonly aiService: AiService,
     private readonly vectorDbService: VectorDbService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   @Post('generate')
   async generateArticle(@Body() body: { prompt: string }) {
@@ -33,17 +33,17 @@ export class ArticleController {
     if (body.currentContent || body.articleContent) {
       return body.currentContent || body.articleContent;
     }
-    
+
     if (body.articleId || body.freshdeskId) {
       const article = await this.prisma.article.findFirst({
-        where: body.articleId 
-          ? { id: body.articleId } 
+        where: body.articleId
+          ? { id: body.articleId }
           : { freshdeskId: body.freshdeskId.toString() }
       });
       if (!article) throw new NotFoundException('Artigo não encontrado no banco de dados');
       return article.description;
     }
-    
+
     throw new Error('Forneça currentContent/articleContent ou articleId/freshdeskId');
   }
 
@@ -75,28 +75,75 @@ export class ArticleController {
     // 1. Gera o embedding da mensagem
     const embedding = await this.aiService.generateEmbedding(body.productMessage);
 
-    // 2. Busca na base os 5 trechos mais relevantes para evitar dispersão e economizar contexto
-    const similarChunks = await this.vectorDbService.semanticSearch(embedding, 5);
+    // 2. Busca mais chunks para ter contexto mais rico (12 em vez de 5)
+    const similarChunks = await this.vectorDbService.semanticSearch(embedding, 12);
 
     if (!similarChunks.length) {
       return { affected_articles: [], summary: 'Nenhum contexto encontrado na base de conhecimento para essa mensagem.' };
     }
 
-    // 3. Busca os títulos dos artigos correspondentes no banco para dar contexto melhor à IA
+    // 3. Busca títulos dos artigos correspondentes
     const articleIds = [...new Set(similarChunks.map(c => c.articleId))];
     const articlesInDb = await this.prisma.article.findMany({
       where: { id: { in: articleIds } },
-      select: { id: true, title: true }
+      select: { id: true, title: true, description: true }
     });
 
-    // 4. Formata o contexto
+    // 4. Formata o contexto para o Passo 1
     const articlesContext = similarChunks.map((chunk, idx) => {
       const article = articlesInDb.find(a => a.id === chunk.articleId);
-      return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo do Artigo: ${article?.title}\nConteúdo: ${chunk.content}\n`;
+      return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo: ${article?.title ?? 'Desconhecido'}\nConteúdo do trecho: ${chunk.content}\n`;
     }).join('\n');
 
-    // 5. Pede pro Gemini fazer o cruzamento e análise crítica
-    return this.aiService.analyzeImpact(body.productMessage, articlesContext);
+    // 5. Passo 1: análise conservadora com os chunks
+    const preliminaryResult = await this.aiService.analyzeImpact(body.productMessage, articlesContext);
+
+    if (!preliminaryResult.affected_articles.length) {
+      return preliminaryResult;
+    }
+
+    // 6. Passo 2: verificação com o artigo COMPLETO para cada candidato
+    const verifiedArticles: AnalyzeImpactResult['affected_articles'] = [];
+
+    for (const candidate of preliminaryResult.affected_articles) {
+      const fullArticle = articlesInDb.find(a => a.id === candidate.articleId);
+
+      // Se não encontrou no DB com description, pula (não descarta — mantém candidato)
+      if (!fullArticle?.description) {
+        verifiedArticles.push(candidate);
+        continue;
+      }
+
+      const verification = await this.aiService.verifyArticleImpact(
+        body.productMessage,
+        candidate.affected_excerpt ?? candidate.reason,
+        candidate.reason,
+        fullArticle.description,
+      );
+
+      // Só inclui se a verificação confirmou o impacto
+      if (verification.confirmed) {
+        verifiedArticles.push({
+          ...candidate,
+          // Atualiza com os dados mais precisos da verificação completa
+          reason: verification.reason,
+          affected_excerpt: verification.affected_excerpt ?? candidate.affected_excerpt,
+          suggested_update_instruction: verification.suggested_update_instruction ?? candidate.suggested_update_instruction,
+          // Rebaixa o impacto se a confiança for baixa
+          impact: verification.confidence === 'BAIXA' ? 'BAIXO' : candidate.impact,
+        });
+      }
+    }
+
+    // 7. Monta o resultado final
+    const finalSummary = verifiedArticles.length === 0
+      ? `${preliminaryResult.summary} Após verificação detalhada dos artigos completos, nenhum conteúdo foi identificado como diretamente desatualizado.`
+      : preliminaryResult.summary;
+
+    return {
+      affected_articles: verifiedArticles,
+      summary: finalSummary,
+    };
   }
 
   @Post('analyze-style')
