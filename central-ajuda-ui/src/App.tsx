@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './index.css';
 import { HelpCenterPreview } from './components/HelpCenterPreview';
-import { copyToClipboardWithFormatting, prepareHtmlForCms } from './utils/clipboard';
+import { copyMarkdownAsFreshdeskHtml } from './utils/clipboard';
 
 interface ImpactArticle {
   articleId: string;
@@ -19,6 +19,29 @@ interface RevisedArticle {
 interface ImpactResult {
   affected_articles: ImpactArticle[];
   summary: string;
+}
+
+// Botão de copiar com feedback visual
+function CopyFreshdeskButton({ content, label = '📋 Copiar para Freshdesk' }: { content: string; label?: string }) {
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleCopy = async () => {
+    const ok = await copyMarkdownAsFreshdeskHtml(content);
+    setStatus(ok ? 'success' : 'error');
+    setTimeout(() => setStatus('idle'), 2500);
+  };
+
+  return (
+    <button
+      className="btn btn-primary"
+      onClick={handleCopy}
+      style={{ width: '100%' }}
+    >
+      {status === 'idle' && label}
+      {status === 'success' && '✅ Copiado! Cole no Freshdesk (Ctrl+V)'}
+      {status === 'error' && '❌ Falha — tente selecionar manualmente'}
+    </button>
+  );
 }
 
 function App() {
@@ -48,10 +71,7 @@ function App() {
         body: JSON.stringify({ productMessage }),
       });
 
-      if (!response.ok) {
-        throw new Error('Falha ao comunicar com a API');
-      }
-
+      if (!response.ok) throw new Error('Falha ao comunicar com a API');
       const data = await response.json();
       setResult(data);
     } catch (err: any) {
@@ -69,7 +89,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           articleId: article.articleId,
-          whatToChange: article.suggested_update_instruction
+          whatToChange: article.suggested_update_instruction,
         }),
       });
 
@@ -80,29 +100,15 @@ function App() {
         ...prev,
         [article.articleId]: {
           revised_content: data.revised_content,
-          changes_summary: data.changes_summary
-        }
+          changes_summary: data.changes_summary,
+        },
       }));
       setUpdateSuccess(article.articleId);
       setShowPreview(article.articleId);
-    } catch (err) {
+    } catch {
       alert('Erro ao tentar atualizar o artigo de ID: ' + article.articleId);
     } finally {
       setApplyingUpdate(null);
-    }
-  };
-
-  const handleCopyFormatted = async (articleId: string) => {
-    const revised = revisedArticles[articleId];
-    if (!revised) return;
-
-    const html = prepareHtmlForCms('article-preview-content');
-    const success = await copyToClipboardWithFormatting(html, revised.revised_content);
-
-    if (success) {
-      alert('Copiado com formatação! Agora é só dar Ctrl+V na sua Central de Ajuda.');
-    } else {
-      alert('Falha ao copiar. Tente selecionar o texto manualmente.');
     }
   };
 
@@ -115,13 +121,15 @@ function App() {
     }
   };
 
+  const currentArticle = showPreview ? result?.affected_articles.find(a => a.articleId === showPreview) : null;
+  const currentRevised = showPreview ? revisedArticles[showPreview] : null;
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar Simples */}
+      {/* Sidebar */}
       <aside className="glass-panel" style={{ width: '280px', margin: '16px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
         <h2 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>Next Fit AI</h2>
         <p style={{ fontSize: '0.85rem', marginBottom: '32px' }}>Assistente da Base de Conhecimento</p>
-
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div
             style={{ padding: '10px 16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', fontWeight: 500, color: 'var(--accent-primary)', borderLeft: '3px solid var(--accent-primary)', cursor: 'pointer' }}
@@ -135,37 +143,54 @@ function App() {
         </nav>
       </aside>
 
-      {/* Conteúdo Principal */}
+      {/* Main */}
       <main style={{ flex: 1, padding: '16px 32px 32px 16px', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
 
-        {showPreview && revisedArticles[showPreview] ? (
-          /* Preview Mode */
+        {showPreview && currentRevised ? (
+          /* ── Preview Mode ── */
           <section className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
               <button className="btn btn-secondary" onClick={() => setShowPreview(null)}>
                 ← Voltar para lista
               </button>
-              <button className="btn btn-primary" onClick={() => handleCopyFormatted(showPreview)}>
-                📋 Copiar para Central de Ajuda
-              </button>
+
+              {/* Botão principal — copia direto para o Freshdesk */}
+              <CopyFreshdeskButton content={currentRevised.revised_content} />
             </div>
+
+            {/* Dica de uso */}
+            <div style={{ padding: '12px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              💡 <strong style={{ color: 'var(--text-primary)' }}>Como usar:</strong> Clique em "Copiar para Freshdesk" → abra o artigo no Freshdesk → clique no editor → <kbd style={{ background: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px', fontSize: '0.8rem' }}>Ctrl+V</kbd>. A formatação (negrito, listas, links) será preservada.
+            </div>
+
+            {/* Resumo de alterações */}
+            {currentRevised.changes_summary?.length > 0 && (
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '8px' }}>Alterações realizadas</h4>
+                <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {currentRevised.changes_summary.map((c, i) => (
+                    <li key={i} style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div id="article-preview-content">
               <HelpCenterPreview
-                title={result?.affected_articles.find(a => a.articleId === showPreview)?.title || 'Artigo Atualizado'}
-                content={revisedArticles[showPreview].revised_content}
+                title={currentArticle?.title || 'Artigo Atualizado'}
+                content={currentRevised.revised_content}
               />
             </div>
           </section>
+
         ) : (
-          /* Analysis Mode */
+          /* ── Analysis Mode ── */
           <>
             <header style={{ paddingBottom: '16px', borderBottom: '1px solid var(--border-light)' }}>
               <h1 style={{ fontSize: '1.8rem' }}>Análise de Impacto de Produto</h1>
               <p style={{ marginTop: '4px' }}>Cole as PRDs ou mensagens do time de Produto para cruzar com a base de conhecimento.</p>
             </header>
 
-            {/* Input Area */}
             <section className="glass-panel animate-fade-in" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontWeight: 500, marginBottom: '8px' }}>Nova Atualização de Produto</label>
@@ -184,7 +209,6 @@ function App() {
               </div>
             </section>
 
-            {/* Error State */}
             {error && (
               <div className="glass-panel animate-fade-in" style={{ padding: '16px', borderLeft: '4px solid var(--danger)', background: 'rgba(239, 68, 68, 0.1)' }}>
                 <h3 style={{ color: 'var(--danger)', marginBottom: '4px' }}>Erro</h3>
@@ -192,7 +216,6 @@ function App() {
               </div>
             )}
 
-            {/* Results Area */}
             {result && (
               <section className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div className="glass-panel" style={{ padding: '20px', background: 'var(--bg-tertiary)' }}>
@@ -221,7 +244,8 @@ function App() {
                             fontWeight: 700,
                             backgroundColor: 'rgba(255,255,255,0.05)',
                             color: getImpactColor(article.impact),
-                            border: `1px solid ${getImpactColor(article.impact)}`
+                            border: `1px solid ${getImpactColor(article.impact)}`,
+                            whiteSpace: 'nowrap',
                           }}>
                             {article.impact}
                           </span>
@@ -237,16 +261,18 @@ function App() {
                           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>"{article.suggested_update_instruction}"</p>
                         </div>
 
-                        <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+                        <div style={{ marginTop: 'auto', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {updateSuccess === article.articleId ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <>
                               <div style={{ padding: '10px', textAlign: 'center', color: 'var(--success)', background: 'rgba(16, 185, 129, 0.1)', borderRadius: 'var(--radius-sm)' }}>
                                 ✅ Atualização Gerada!
                               </div>
                               <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => setShowPreview(article.articleId)}>
-                                ✨ Ver Preview Formatado
+                                👁 Ver Preview
                               </button>
-                            </div>
+                              {/* Botão de copiar direto no card, sem precisar abrir o preview */}
+                              <CopyFreshdeskButton content={revisedArticles[article.articleId].revised_content} />
+                            </>
                           ) : (
                             <button
                               className="btn btn-primary"
@@ -272,4 +298,3 @@ function App() {
 }
 
 export default App;
-
