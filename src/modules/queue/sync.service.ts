@@ -35,15 +35,24 @@ export class SyncService {
 
   async syncArticle(article: any) {
     try {
-      // PULAR SE JÁ EXISTE NO BANCO E NÃO ESTÁ FALTANDO CHUNKS
+      // BUSCAR SE JÁ EXISTE NO BANCO E O ÚLTIMO UPDATE
       const exists = await this.prisma.article.findUnique({
         where: { freshdeskId: article.id.toString() },
-        include: { _count: { select: { chunks: true } } }
+        select: {
+          id: true,
+          freshdeskUpdatedAt: true,
+          _count: { select: { chunks: true } }
+        }
       });
 
-      if (exists && exists._count.chunks > 0) {
-        this.logger.log(`[PULANDO] Article já sincronizado e vetorizado: ${article.title}`);
-        return;
+      const freshdeskUpdatedAt = new Date(article.updated_at);
+
+      if (exists && exists._count.chunks > 0 && exists.freshdeskUpdatedAt) {
+        if (freshdeskUpdatedAt <= new Date(exists.freshdeskUpdatedAt)) {
+          this.logger.log(`[PULANDO] Article já sincronizado e sem alterações: ${article.title}`);
+          return;
+        }
+        this.logger.log(`[ATUALIZANDO] Article alterado no Freshdesk: ${article.title}`);
       }
 
       this.logger.log(`Processing article: ${article.title}`);
@@ -85,6 +94,7 @@ export class SyncService {
         markdown,
         article.category_id?.toString() || null,
         article.tags || [],
+        freshdeskUpdatedAt,
         chunksData,
       );
     } catch (e) {

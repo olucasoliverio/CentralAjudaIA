@@ -11,18 +11,20 @@ export class VectorDbService {
     description: string,
     category: string | null,
     tags: string[],
+    freshdeskUpdatedAt: Date | null,
     chunksData: { content: string; embedding: number[]; tokenCount: number }[],
   ) {
     return this.prisma.$transaction(async (tx: any) => {
       const article = await tx.article.upsert({
         where: { freshdeskId },
-        update: { title, description, category, tags: { set: tags } },
+        update: { title, description, category, tags: { set: tags }, freshdeskUpdatedAt },
         create: {
           freshdeskId,
           title,
           description,
           category,
           tags: { set: tags },
+          freshdeskUpdatedAt,
         },
       });
 
