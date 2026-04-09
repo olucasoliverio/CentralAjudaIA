@@ -184,25 +184,39 @@ export class AiService {
     currentContent: string,
     whatToChange: string,
   ): Promise<UpdateArticleResult> {
+    const systemInstruction = UPDATE_ARTICLE_SYSTEM_PROMPT;
+
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}`,
+      contents: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}\n\nINSTRUÇÃO: Aplique as alterações no artigo e retorne EXATAMENTE no formato de blocos ---CONTENT_START--- e ---META_START--- definido nas instruções de sistema.`,
       config: {
-        systemInstruction: UPDATE_ARTICLE_SYSTEM_PROMPT,
+        systemInstruction,
         temperature: 0.2,
       },
     });
 
     const text = result.text;
     if (!text) {
+      this.logger.warn('Gemini retornou texto vazio no updateArticle.');
       return { revised_content: '', changes_summary: [], style_violations_fixed: [], assumptions: [] };
     }
 
-    // Extração robusta via delimitadores para evitar quebras de JSON.parse com Markdown longo
-    const contentMatch = text.match(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/);
-    const metaMatch = text.match(/---META_START---([\s\S]*?)---META_END---/);
+    const cleanText = this.cleanThinkingTags(text);
+    this.logger.debug(`Revisão bruta recebida: ${cleanText}`);
+    
+    // Extração robusta via delimitadores (insensível a case)
+    const contentMatch = cleanText.match(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/i);
+    const metaMatch = cleanText.match(/---META_START---([\s\S]*?)---META_END---/i);
 
-    const revised_content = contentMatch ? contentMatch[1].trim() : '';
+    let revised_content = contentMatch ? contentMatch[1].trim() : '';
+    
+    // Fallback: se não encontrou delimitadores mas a IA respondeu algo substancial,
+    // não deixa o usuário com a tela vazia.
+    if (!revised_content && cleanText.length > 100) {
+      this.logger.warn('Protocolo de blocos falhou no updateArticle, usando fallback de texto bruto.');
+      revised_content = cleanText;
+    }
+
     const metaText = metaMatch ? metaMatch[1].trim() : '{}';
 
     try {
@@ -217,7 +231,9 @@ export class AiService {
       this.logger.error(`Erro ao processar metadados da revisão: ${e.message}`);
       return {
         revised_content,
-        changes_summary: ['A revisão foi aplicada, mas houve um erro ao processar o resumo das mudanças.'],
+        changes_summary: revised_content 
+          ? ['A revisão foi aplicada, mas houve um erro ao processar o resumo das mudanças.']
+          : ['Erro: O modelo não retornou conteúdo válido.'],
         style_violations_fixed: [],
         assumptions: [],
       };
