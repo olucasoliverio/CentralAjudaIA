@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { api, type QualityScore, type StyleAnalysis, type RevisedArticle } from '../api';
 import { CopyFreshdeskButton } from './CopyFreshdeskButton';
 import { HelpCenterPreview } from './HelpCenterPreview';
+import { GenerationHistoryPanel } from './GenerationHistoryPanel';
+import { useGenerationHistory, type GenerationEntry } from '../hooks/useGenerationHistory';
 
 type Tab = 'quality' | 'review' | 'style';
 type InputMode = 'id' | 'content';
@@ -24,6 +26,9 @@ export function ArticleReviewer() {
   const [reviewResult, setReviewResult] = useState<RevisedArticle | null>(null);
   const [styleResult, setStyleResult] = useState<StyleAnalysis | null>(null);
   const [showReviewPreview, setShowReviewPreview] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const { history, addEntry, clearHistory, removeEntry } = useGenerationHistory();
 
   const isNumeric = (val: string) => /^\d+$/.test(val.trim());
 
@@ -79,11 +84,30 @@ export function ArticleReviewer() {
       }
       const data = await api.updateArticle(params);
       setReviewResult(data);
+
+      // Salva no histórico
+      addEntry(
+        `[Revisão] ${articleId || 'Conteúdo colado'}: ${reviewInstructions || 'Auto-ajuste'}`,
+        data.revised_content,
+        articleId ? [{ id: articleId, title: 'Artigo Revisado' }] : []
+      );
     } catch (err: any) {
       setError(err.message || 'Erro ao revisar artigo.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRestoreFromHistory = (entry: GenerationEntry) => {
+    setReviewResult({
+      revised_content: entry.content,
+      changes_summary: [entry.prompt],
+      style_violations_fixed: [],
+      assumptions: []
+    });
+    setShowReviewPreview(true);
+    setShowHistory(false);
+    setActiveTab('review');
   };
 
   const handleStyleAnalysis = async () => {
@@ -183,9 +207,36 @@ export function ArticleReviewer() {
   return (
     <>
       <header className="page-header">
-        <h1>Revisor de Artigos</h1>
-        <p>Avalie a qualidade, revise o conteúdo ou analise o estilo de artigos existentes.</p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <h1>Revisor de Artigos</h1>
+            <p>Avalie a qualidade, revise o conteúdo ou analise o estilo de artigos existentes.</p>
+          </div>
+          <button
+            id="history-toggle-btn"
+            className={`btn btn-secondary ${showHistory ? 'active' : ''}`}
+            onClick={() => setShowHistory(v => !v)}
+            style={{ flexShrink: 0, position: 'relative' }}
+          >
+            Histórico
+            {history.length > 0 && (
+              <span className="nav-badge" style={{ position: 'absolute', top: '-6px', right: '-6px' }}>
+                {history.length}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
+
+      {/* Painel de histórico — desliza abaixo do header */}
+      {showHistory && (
+        <GenerationHistoryPanel
+          history={history}
+          onRestore={handleRestoreFromHistory}
+          onRemove={removeEntry}
+          onClear={clearHistory}
+        />
+      )}
 
       {/* Tabs */}
       <div className="tab-bar">

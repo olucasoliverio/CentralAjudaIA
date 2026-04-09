@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { api, type ImpactArticle, type ImpactResult, type RevisedArticle } from '../api';
 import { CopyFreshdeskButton } from './CopyFreshdeskButton';
 import { HelpCenterPreview } from './HelpCenterPreview';
+import { GenerationHistoryPanel } from './GenerationHistoryPanel';
+import { useGenerationHistory, type GenerationEntry } from '../hooks/useGenerationHistory';
 
 export function ImpactAnalyzer() {
   const [productMessage, setProductMessage] = useState('');
@@ -12,6 +14,9 @@ export function ImpactAnalyzer() {
   const [updateSuccess, setUpdateSuccess] = useState<string | null>(null);
   const [revisedArticles, setRevisedArticles] = useState<Record<string, RevisedArticle>>({});
   const [showPreview, setShowPreview] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const { history, addEntry, clearHistory, removeEntry } = useGenerationHistory();
 
   const handleAnalyze = async () => {
     if (!productMessage.trim()) return;
@@ -45,11 +50,36 @@ export function ImpactAnalyzer() {
       }));
       setUpdateSuccess(article.articleId);
       setShowPreview(article.articleId);
+
+      // Salva no histórico automaticamente com o título do artigo + a instrução usada
+      addEntry(
+        `[Impacto] ${article.title}: ${article.suggested_update_instruction}`,
+        data.revised_content,
+        [{ id: article.articleId, title: article.title }]
+      );
     } catch {
       alert('Erro ao tentar atualizar o artigo de ID: ' + article.articleId);
     } finally {
       setApplyingUpdate(null);
     }
+  };
+
+  const handleRestoreFromHistory = (entry: GenerationEntry) => {
+    // Para simplificar, quando restaura do histórico aqui, 
+    // assumimos que é uma visualização isolada do conteúdo
+    const pseudoArticleId = entry.sources[0]?.id || `hist-${entry.id}`;
+    setRevisedArticles(prev => ({
+      ...prev,
+      [pseudoArticleId]: {
+        revised_content: entry.content,
+        changes_summary: [entry.prompt],
+        style_violations_fixed: [],
+        assumptions: []
+      }
+    }));
+    setShowPreview(pseudoArticleId);
+    setUpdateSuccess(pseudoArticleId);
+    setShowHistory(false);
   };
 
   const getImpactBadgeClass = (impact: string) => {
@@ -119,9 +149,36 @@ export function ImpactAnalyzer() {
   return (
     <>
       <header className="page-header">
-        <h1>Análise de Impacto</h1>
-        <p>Cole as PRDs ou mensagens do time de Produto para cruzar com a base de conhecimento.</p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <h1>Análise de Impacto</h1>
+            <p>Cole as PRDs ou mensagens do time de Produto para cruzar com a base de conhecimento.</p>
+          </div>
+          <button
+            id="history-toggle-btn"
+            className={`btn btn-secondary ${showHistory ? 'active' : ''}`}
+            onClick={() => setShowHistory(v => !v)}
+            style={{ flexShrink: 0, position: 'relative' }}
+          >
+            Histórico
+            {history.length > 0 && (
+              <span className="nav-badge" style={{ position: 'absolute', top: '-6px', right: '-6px' }}>
+                {history.length}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
+
+      {/* Painel de histórico — desliza abaixo do header */}
+      {showHistory && (
+        <GenerationHistoryPanel
+          history={history}
+          onRestore={handleRestoreFromHistory}
+          onRemove={removeEntry}
+          onClear={clearHistory}
+        />
+      )}
 
       <section className="panel animate-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
         <div>
