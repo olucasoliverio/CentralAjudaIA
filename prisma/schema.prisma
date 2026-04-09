@@ -27,7 +27,7 @@ model Chunk {
   id         String   @id @default(uuid())
   articleId  String
   content    String   @db.Text
-  embedding  Unsupported("vector(3072)")?
+  embedding  Unsupported("vector(768)")?
   tokenCount Int?
   createdAt  DateTime @default(now())
 

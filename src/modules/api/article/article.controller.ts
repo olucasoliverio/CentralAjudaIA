@@ -23,10 +23,37 @@ export class ArticleController {
     // 3. Geração com contexto RAG + Guia de Estilo Next Fit via Gemini
     const content = await this.aiService.generateArticleRAG(body.prompt, context);
 
+    const articleIds = [...new Set(similarChunks.map(c => c.articleId))];
+    const articlesDb = await this.prisma.article.findMany({
+      where: { id: { in: articleIds } },
+      select: { id: true, title: true }
+    });
+
     return {
       generated_content: content,
-      sources: similarChunks.map((c) => c.articleId),
+      sources: articlesDb,
     };
+  }
+
+  @Post('search')
+  async search(@Body() body: { query: string; topK?: number }) {
+    if (!body.query) throw new Error('Forneça a query de busca.');
+    const embedding = await this.aiService.generateEmbedding(body.query);
+    const results = await this.vectorDbService.semanticSearch(embedding, body.topK || 5);
+    
+    const articleIds = [...new Set(results.map(c => c.articleId))];
+    const articlesDb = await this.prisma.article.findMany({
+      where: { id: { in: articleIds } },
+      select: { id: true, title: true }
+    });
+
+    return results.map(r => {
+      const article = articlesDb.find(a => a.id === r.articleId);
+      return {
+        ...r,
+        title: article?.title ?? 'Desconhecido'
+      };
+    });
   }
 
   private async fetchContentFromDb(body: any): Promise<string> {
@@ -57,6 +84,17 @@ export class ArticleController {
     let instruction = body.whatToChange;
     if (!instruction) {
       const score = await this.aiService.scoreArticleQuality(content);
+      
+      // Early return se a qualidade já está alta e prioridade é baixa
+      if (score?.score >= 8 && score?.priority === 'baixa') {
+        return {
+          revised_content: content,
+          changes_summary: [`Artigo não necessita de revisão. Score: ${score.score}/10.`],
+          style_violations_fixed: [],
+          assumptions: []
+        };
+      }
+
       const issues: string[] = score?.issues ?? [];
       instruction = issues.length > 0
         ? `Corrija os seguintes problemas detectados: ${issues.join('; ')}`
@@ -118,7 +156,7 @@ export class ArticleController {
         body.productMessage,
         candidate.affected_excerpt ?? candidate.reason,
         candidate.reason,
-        fullArticle.description,
+        candidate.affected_excerpt ?? fullArticle.description,
       );
 
       // Só inclui se a verificação confirmou o impacto

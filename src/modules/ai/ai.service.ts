@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import {
   GENERATE_ARTICLE_SYSTEM_PROMPT,
   ANALYZE_STYLE_SYSTEM_PROMPT,
@@ -40,71 +40,17 @@ export interface VerifyImpactResult {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private gemini: GoogleGenerativeAI;
+  private readonly ai: GoogleGenAI;
 
   constructor() {
-    this.gemini = new GoogleGenerativeAI(
-      process.env.GEMINI_API_KEY || 'dummy_key',
-    );
-  }
-
-  // ─── EMBEDDINGS VIA GEMINI (CUSTO ZERO) ────────────────────────────
-  async generateEmbedding(text: string): Promise<number[]> {
-    try {
-      const model = this.gemini.getGenerativeModel({
-        model: 'gemini-embedding-001',
-      });
-      const result = await model.embedContent(text);
-      return result.embedding.values;
-    } catch (error) {
-      this.logger.error('Erro ao gerar embedding via Gemini', error);
-      throw error;
-    }
-  }
-
-  async generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
-    try {
-      const model = this.gemini.getGenerativeModel({
-        model: 'gemini-embedding-001',
-      });
-      const result = await model.batchEmbedContents({
-        requests: texts.map((text) => ({
-          content: { role: 'user', parts: [{ text }] },
-        })),
-      });
-      return result.embeddings.map((e) => e.values);
-    } catch (error) {
-      this.logger.error('Erro ao gerar embeddings em batch via Gemini', error);
-      throw error;
-    }
-  }
-
-  // ─── GERAÇÃO DE ARTIGO RAG VIA GEMINI ──────────────────────────────
-  async generateArticleRAG(
-    prompt: string,
-    contextChunks: string[],
-  ): Promise<string> {
-    const context = contextChunks.join('\n\n---\n\n');
-    const systemMessage = GENERATE_ARTICLE_SYSTEM_PROMPT.replace(
-      '{context}',
-      context,
-    );
-
-    const model = this.gemini.getGenerativeModel({
-      model: 'gemini-2.5-pro',
-      systemInstruction: systemMessage,
+    this.ai = new GoogleGenAI({
+      vertexai: true,
+      project: process.env.GOOGLE_CLOUD_PROJECT,
+      location: process.env.GOOGLE_CLOUD_LOCATION || 'us-central1',
     });
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1 },
-    });
-
-    const text = result.response.text() || '';
-    return this.cleanThinkingTags(text);
   }
 
-  // Helper para limpar tags de pensamento e extrair apenas o conteúdo final
+  // ─── Helper: limpar tags de pensamento ─────────────────────────────
   private cleanThinkingTags(text: string): string {
     const thinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
     if (thinkingMatch) {
@@ -113,12 +59,13 @@ export class AiService {
     return text.replace(/<thinking>([\s\S]*?)<\/thinking>/, '').trim();
   }
 
-  // Helper para extrair JSON de respostas que podem conter tags ou markdown
+  // ─── Helper: extrair JSON de resposta da IA ─────────────────────────
   private extractJson<T>(text: string): T {
-    this.cleanThinkingTags(text); // Loga o pensamento no debug
+    this.cleanThinkingTags(text);
     const cleanText = text.replace(/<thinking>([\s\S]*?)<\/thinking>/, '').trim();
 
-    const jsonMatch = cleanText.match(/```json\s*([\s\S]*?)\s*```/) || cleanText.match(/{[\s\S]*}/);
+    const jsonMatch =
+      cleanText.match(/```json\s*([\s\S]*?)\s*```/) || cleanText.match(/{[\s\S]*}/);
     if (jsonMatch) {
       try {
         return JSON.parse(jsonMatch[1] || jsonMatch[0]) as T;
@@ -130,74 +77,125 @@ export class AiService {
     throw new Error('Não foi possível encontrar um JSON válido na resposta da IA.');
   }
 
-  // ─── REVISÃO DE ARTIGO VIA GEMINI ──────────────────────────────────
+  // ─── EMBEDDINGS VIA VERTEX AI (text-multilingual-embedding-002) ────
+  async generateEmbedding(text: string): Promise<number[]> {
+    try {
+      const result = await this.ai.models.embedContent({
+        model: 'text-multilingual-embedding-002',
+        contents: text,
+      });
+      return result.embeddings?.[0]?.values ?? [];
+    } catch (error) {
+      this.logger.error('Erro ao gerar embedding via Vertex AI', error);
+      throw error;
+    }
+  }
+
+  async generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
+    try {
+      const results = await Promise.all(
+        texts.map((text) =>
+          this.ai.models.embedContent({
+            model: 'text-multilingual-embedding-002',
+            contents: text,
+          }),
+        ),
+      );
+      return results.map((r) => r.embeddings?.[0]?.values ?? []);
+    } catch (error) {
+      this.logger.error('Erro ao gerar embeddings em batch via Vertex AI', error);
+      throw error;
+    }
+  }
+
+  // ─── GERAÇÃO DE ARTIGO RAG ──────────────────────────────────────────
+  async generateArticleRAG(prompt: string, contextChunks: string[]): Promise<string> {
+    const context = contextChunks.join('\n\n---\n\n');
+    
+    // O modelo Fine-Tunned (SFT) surta se o System Prompt for muito diferente do que ele viu no treino.
+    // Usamos o system prompt original do treinamento.
+    const systemInstruction = "Você é o redator oficial da Central de Ajuda da Next Fit. Geração de artigos técnicos. Seja conciso, use tom imperativo e estruture os passos em narrativa flúida sem listas numeradas.";
+
+    const userPrompt = `
+Gere APENAS 1 ÚNICO artigo sobre a intenção/PRD abaixo. 
+Siga o tom da Next Fit. NUNCA resuma ou liste os artigos de referência do RAG.
+Seu corpo de texto DEVE ser sobre a "Mensagem do Usuário".
+
+[MENSAGEM DO USUÁRIO / PRD]
+${prompt}
+
+[ARTIGOS DE REFERÊNCIA ANTIGOS / VOCABULÁRIO RAG]
+${context}
+`;
+
+    const result = await this.ai.models.generateContent({
+      model: 'projects/548093153407/locations/us-central1/endpoints/8189391851850039296',
+      contents: userPrompt,
+      config: {
+        systemInstruction,
+        temperature: 0.1,
+      },
+    });
+
+    const text = result.text ?? '';
+    return this.cleanThinkingTags(text);
+  }
+
+  // ─── REVISÃO DE ARTIGO ──────────────────────────────────────────────
   async updateArticle(
     currentContent: string,
     whatToChange: string,
   ): Promise<UpdateArticleResult> {
-    const model = this.gemini.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: UPDATE_ARTICLE_SYSTEM_PROMPT,
-    });
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}` }],
-        },
-      ],
-      generationConfig: {
+    const result = await this.ai.models.generateContent({
+      model: 'projects/548093153407/locations/us-central1/endpoints/8189391851850039296',
+      contents: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}`,
+      config: {
+        systemInstruction: UPDATE_ARTICLE_SYSTEM_PROMPT,
         temperature: 0.2,
       },
     });
 
-    const content = result.response.text();
+    const content = result.text;
     if (!content) {
       return { revised_content: '', changes_summary: [], style_violations_fixed: [], assumptions: [] };
     }
     return this.extractJson<UpdateArticleResult>(content);
   }
 
-  // ─── ANÁLISE DE ESTILO / PADRÃO ───────────────────────────────────
-  async analyzeStyle(contextChunks: string[]): Promise<any> {
-    const context = contextChunks.join('\n\n---\n\n');
-    const systemMessage = ANALYZE_STYLE_SYSTEM_PROMPT.replace(
-      '{context}',
-      context,
+  // ─── ANÁLISE DE ESTILO / PADRÃO ────────────────────────────────────
+  async analyzeStyle(contextChunks: string[]): Promise<any[]> {
+    const systemInstruction = ANALYZE_STYLE_SYSTEM_PROMPT;
+
+    const results = await Promise.all(
+      contextChunks.map(async (content) => {
+        const result = await this.ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `Artigo a ser analisado:\n\n${content}`,
+          config: { systemInstruction },
+        });
+        const text = result.text;
+        return text ? this.extractJson<any>(text) : {};
+      })
     );
 
-    const model = this.gemini.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: systemMessage,
-    });
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: 'Analise os artigos do contexto e forneça o JSON de avaliação.' }] }],
-    });
-
-    const content = result.response.text();
-    return content ? this.extractJson<any>(content) : {};
+    return results;
   }
 
   // ─── QUALITY SCORING ───────────────────────────────────────────────
   async scoreArticleQuality(articleContent: string): Promise<any> {
-    const systemInstruction = QUALITY_SCORE_PROMPT.replace('{article}', articleContent);
+    const systemInstruction = QUALITY_SCORE_PROMPT;
 
-    const model = this.gemini.getGenerativeModel({
+    const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      systemInstruction: systemInstruction,
+      contents: `Avalie este artigo de acordo com as instruções fornecidas e retorne um JSON.\n\nArtigo:\n${articleContent}`,
+      config: { systemInstruction },
     });
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: 'Avalie este artigo de acordo com as instruções fornecidas e retorne um JSON.' }] }],
-    });
-
-    const content = result.response.text();
+    const content = result.text;
     return content ? this.extractJson<any>(content) : {};
   }
 
-  // ─── ANÁLISE DE IMPACTO DE PRODUTO (Passo 1 — busca semântica) ─────
+  // ─── ANÁLISE DE IMPACTO DE PRODUTO (Passo 1) ───────────────────────
   async analyzeImpact(
     productMessage: string,
     articlesContext: string,
@@ -206,26 +204,23 @@ export class AiService {
       .replace('{productMessage}', productMessage)
       .replace('{articlesContext}', articlesContext);
 
-    const model = this.gemini.getGenerativeModel({
+    const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      systemInstruction,
-    });
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: 'Cruze as informações e retorne o JSON de impacto. Seja conservador: só inclua artigos com conteúdo diretamente desatualizado.' }] }],
-      generationConfig: {
+      contents: 'Cruze as informações e retorne o JSON de impacto. Seja conservador: só inclua artigos com conteúdo diretamente desatualizado.',
+      config: {
+        systemInstruction,
         temperature: 0.1,
       },
     });
 
-    const content = result.response.text();
+    const content = result.text;
     if (!content) {
       return { affected_articles: [], summary: 'Não foi possível analisar o impacto' };
     }
     return this.extractJson<AnalyzeImpactResult>(content);
   }
 
-  // ─── VERIFICAÇÃO DE IMPACTO (Passo 2 — artigo completo) ────────────
+  // ─── VERIFICAÇÃO DE IMPACTO (Passo 2) ─────────────────────────────
   async verifyArticleImpact(
     productMessage: string,
     affectedExcerpt: string,
@@ -238,19 +233,16 @@ export class AiService {
       .replace('{preliminaryReason}', preliminaryReason)
       .replace('{fullArticleContent}', fullArticleContent);
 
-    const model = this.gemini.getGenerativeModel({
+    const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      systemInstruction,
-    });
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: 'Confirme ou descarte o impacto lendo o artigo completo. Seja rigoroso.' }] }],
-      generationConfig: {
+      contents: 'Confirme ou descarte o impacto lendo o artigo completo. Seja rigoroso.',
+      config: {
+        systemInstruction,
         temperature: 0.1,
       },
     });
 
-    const content = result.response.text();
+    const content = result.text;
     if (!content) {
       return {
         confirmed: false,
