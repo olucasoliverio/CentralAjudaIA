@@ -277,9 +277,11 @@ Sua tarefa é confirmar ou descartar o impacto de uma mudança de produto em um 
 
 <task_instructions>
 <thinking_process>
-Use a tag <thinking> para validar se o comportamento alterado pela <product_message> está de fato documentado no <full_article_content> de forma que cause confusão ao usuário.
+Use a tag <thinking> para validar se o comportamento alterado pela <product_message> afeta o <full_article_content>. O artigo DEVE ser atualizado se:
+1) Contiver uma informação que se tornou literalmente falsa ou contraditória com a nova atualização.
+Ou 2) Contiver uma lista (ex: de formas de pagamento) ou fluxo onde a nova funcionalidade DEVERIA obrigatoriamente estar para não deixar o cliente desinformado.
 </thinking_process>
-Confirme se o artigo precisa de atualização. Seja rigoroso.
+Confirme se o artigo precisa de atualização baseado nesses dois critérios.
 </task_instructions>
 
 <response_format>

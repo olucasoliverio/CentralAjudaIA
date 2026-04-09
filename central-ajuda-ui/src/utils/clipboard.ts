@@ -1,19 +1,30 @@
 /**
  * Converte Markdown para HTML limpo e copia para a área de transferência.
  * Ao colar no editor visual do Freshdesk (WYSIWYG), a formatação é preservada.
+ *
+ * ═══════════════════════════════════════════════════════════
+ * GUIA DE ESTILO OFICIAL NEXT FIT (aplicado como inline styles)
+ * ═══════════════════════════════════════════════════════════
+ * - H1 (Título):             Verdana 18px, bold, #833AB4, justificado
+ * - H2/H3 (Subtítulo):       Verdana 16px, bold, #264966, justificado
+ * - p (Parágrafo):           Verdana 14px, #264966, justificado
+ * - strong (Atenção):        Verdana 14px, bold, #833AB4
+ * - em (Matriz/Observação):  Verdana 14px, italic, #264966
+ * - li (Listas):             Verdana 14px, #264966
+ * ═══════════════════════════════════════════════════════════
  */
 
-// Converte Markdown para HTML limpo sem dependências externas
+// ── Passo 1: Converte Markdown → HTML bruto ───────────────────────────────────
 function markdownToHtml(markdown: string): string {
   let html = markdown;
 
   // Negrito: **texto** ou __texto__
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  html = html.replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>');
+  html = html.replace(/__(.+?)__/gs, '<strong>$1</strong>');
 
-  // Itálico: *texto* ou _texto_
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/_(.+?)_/g, '<em>$1</em>');
+  // Itálico: *texto* ou _texto_ (somente se não for parte de **)
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/gs, '<em>$1</em>');
+  html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/gs, '<em>$1</em>');
 
   // Links: [texto](url)
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
@@ -21,30 +32,30 @@ function markdownToHtml(markdown: string): string {
   // Imagens: ![alt](url)
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%">');
 
-  // Títulos H1–H4
+  // Títulos H4 → H1 (ordem importa: do mais específico para o mais geral)
   html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // Listas não ordenadas (- item ou * item)
-  html = html.replace(/^(?:[*-]) (.+)$/gm, '<li-bullet>$1</li-bullet>');
-  html = html.replace(/(<li-bullet>.*<\/li-bullet>\n?)+/g, (match) => {
-    const items = match.replace(/<li-bullet>(.*?)<\/li-bullet>/g, '<li>$1</li>');
+  // Listas não ordenadas: - item
+  html = html.replace(/^[*\-] (.+)$/gm, '<li-bullet>$1</li-bullet>');
+  html = html.replace(/(<li-bullet>[\s\S]*?<\/li-bullet>\n?)+/g, (match) => {
+    const items = match.replace(/<li-bullet>([\s\S]*?)<\/li-bullet>/g, '<li>$1</li>');
     return `<ul>${items}</ul>`;
   });
 
-  // Listas ordenadas (1. item)
+  // Listas ordenadas: 1. item
   html = html.replace(/^\d+\. (.+)$/gm, '<li-ordered>$1</li-ordered>');
-  html = html.replace(/(<li-ordered>.*<\/li-ordered>\n?)+/g, (match) => {
-    const items = match.replace(/<li-ordered>(.*?)<\/li-ordered>/g, '<li>$1</li>');
+  html = html.replace(/(<li-ordered>[\s\S]*?<\/li-ordered>\n?)+/g, (match) => {
+    const items = match.replace(/<li-ordered>([\s\S]*?)<\/li-ordered>/g, '<li>$1</li>');
     return `<ol>${items}</ol>`;
   });
 
   // Linhas horizontais
   html = html.replace(/^---+$/gm, '<hr>');
 
-  // Parágrafos — linhas que não são tags HTML
+  // Parágrafos — agrupa linhas que não são tags HTML em <p>
   const lines = html.split('\n');
   const result: string[] = [];
   let inBlock = false;
@@ -52,12 +63,15 @@ function markdownToHtml(markdown: string): string {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
-      inBlock = false;
+      if (inBlock) { result.push('</p>'); inBlock = false; }
       continue;
     }
-    if (trimmed.startsWith('<h') || trimmed.startsWith('<ul') || trimmed.startsWith('<ol') || trimmed.startsWith('<li') || trimmed.startsWith('<hr') || trimmed.startsWith('<img')) {
-      if (inBlock) result.push('</p>');
-      inBlock = false;
+    const isBlock = trimmed.startsWith('<h') || trimmed.startsWith('<ul') ||
+      trimmed.startsWith('<ol') || trimmed.startsWith('<li') ||
+      trimmed.startsWith('<hr') || trimmed.startsWith('<img');
+
+    if (isBlock) {
+      if (inBlock) { result.push('</p>'); inBlock = false; }
       result.push(trimmed);
     } else if (!inBlock) {
       result.push(`<p>${trimmed}`);
@@ -71,35 +85,93 @@ function markdownToHtml(markdown: string): string {
   return result.join('\n');
 }
 
+// ── Passo 2: Aplica estilos inline do Guia Next Fit ─────────────────────────
+function applyNextFitStyles(html: string): string {
+  // H1 — Título: Verdana 18px, bold, roxo #833AB4, justificado
+  html = html.replace(
+    /<h1>([\s\S]*?)<\/h1>/g,
+    '<h1 style="font-family:Verdana,sans-serif;font-size:18px;font-weight:bold;color:#833AB4;text-align:justify;margin:0 0 14px 0;line-height:1.4;">$1</h1>'
+  );
+
+  // H2 — Subtítulo: Verdana 16px, bold, #264966, justificado
+  html = html.replace(
+    /<h2>([\s\S]*?)<\/h2>/g,
+    '<h2 style="font-family:Verdana,sans-serif;font-size:16px;font-weight:bold;color:#264966;text-align:justify;margin:20px 0 10px 0;line-height:1.4;">$1</h2>'
+  );
+
+  // H3 — mesmo estilo do H2
+  html = html.replace(
+    /<h3>([\s\S]*?)<\/h3>/g,
+    '<h3 style="font-family:Verdana,sans-serif;font-size:16px;font-weight:bold;color:#264966;text-align:justify;margin:18px 0 8px 0;line-height:1.4;">$1</h3>'
+  );
+
+  // H4
+  html = html.replace(
+    /<h4>([\s\S]*?)<\/h4>/g,
+    '<h4 style="font-family:Verdana,sans-serif;font-size:14px;font-weight:bold;color:#264966;text-align:justify;margin:14px 0 6px 0;line-height:1.4;">$1</h4>'
+  );
+
+  // p — Parágrafo: Verdana 14px, #264966, justificado
+  html = html.replace(
+    /<p>([\s\S]*?)<\/p>/g,
+    '<p style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;text-align:justify;margin:0 0 12px 0;line-height:1.6;">$1</p>'
+  );
+
+  // strong — Texto de atenção: Verdana 14px, bold, roxo #833AB4
+  html = html.replace(
+    /<strong>([\s\S]*?)<\/strong>/g,
+    '<strong style="font-family:Verdana,sans-serif;font-size:14px;font-weight:bold;color:#833AB4;">$1</strong>'
+  );
+
+  // em — Texto de matriz: Verdana 14px, italic, #264966
+  html = html.replace(
+    /<em>([\s\S]*?)<\/em>/g,
+    '<em style="font-family:Verdana,sans-serif;font-size:14px;font-style:italic;color:#264966;">$1</em>'
+  );
+
+  // ul / ol — Listas
+  html = html.replace(
+    /<ul>/g,
+    '<ul style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;margin:8px 0 14px 24px;padding:0;">'
+  );
+  html = html.replace(
+    /<ol>/g,
+    '<ol style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;margin:8px 0 14px 24px;padding:0;">'
+  );
+  html = html.replace(
+    /<li>/g,
+    '<li style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;margin-bottom:6px;line-height:1.6;">'
+  );
+
+  // Links
+  html = html.replace(
+    /<a href="([^"]+)">/g,
+    '<a href="$1" style="color:#264966;text-decoration:underline;font-family:Verdana,sans-serif;font-size:14px;">'
+  );
+
+  // HR
+  html = html.replace(
+    /<hr>/g,
+    '<hr style="border:none;border-top:1px solid #264966;margin:20px 0;opacity:0.25;">'
+  );
+
+  return html;
+}
+
 /**
  * Copia o conteúdo Markdown como HTML rico para a área de transferência.
  * Funciona no editor WYSIWYG do Freshdesk: ao colar, mantém negrito, links, listas, etc.
  */
 export async function copyMarkdownAsFreshdeskHtml(markdown: string): Promise<boolean> {
-  const html = markdownToHtml(markdown);
+  const rawHtml = markdownToHtml(markdown);
+  const styledHtml = applyNextFitStyles(rawHtml);
 
-  // HTML completo com estilos básicos que o Freshdesk vai respeitar
-  const fullHtml = `
-<!DOCTYPE html>
+  // Inline styles garantem compatibilidade total — Freshdesk ignora <style> global
+  const fullHtml = `<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #333; }
-    h1 { font-size: 22px; font-weight: bold; margin-bottom: 12px; }
-    h2 { font-size: 18px; font-weight: bold; margin-top: 24px; margin-bottom: 8px; }
-    h3 { font-size: 15px; font-weight: bold; margin-top: 20px; margin-bottom: 6px; }
-    p { margin-bottom: 12px; }
-    strong { font-weight: bold; }
-    ul, ol { margin: 8px 0 12px 24px; }
-    li { margin-bottom: 4px; }
-    a { color: #3B82F6; text-decoration: none; }
-    img { max-width: 100%; height: auto; }
-    hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
-  </style>
-</head>
-<body>
-${html}
+<head><meta charset="utf-8"></head>
+<body style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;line-height:1.6;">
+${styledHtml}
 </body>
 </html>`;
 
@@ -117,7 +189,7 @@ ${html}
     await navigator.clipboard.write(data);
     return true;
   } catch {
-    // Fallback: tenta copiar só o texto
+    // Fallback: tenta copiar só o texto puro
     try {
       await navigator.clipboard.writeText(markdown);
       return true;
@@ -151,7 +223,8 @@ export function prepareHtmlForCms(elementId: string): string {
   const clone = element.cloneNode(true) as HTMLElement;
   const headers = clone.querySelectorAll('h1, h2, h3, h4');
   headers.forEach(h => {
-    (h as HTMLElement).style.color = '#1a1a1a';
+    (h as HTMLElement).style.color = '#833AB4';
+    (h as HTMLElement).style.fontFamily = 'Verdana, sans-serif';
     (h as HTMLElement).style.fontWeight = 'bold';
   });
   return clone.innerHTML;

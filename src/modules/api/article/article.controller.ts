@@ -200,9 +200,12 @@ export class ArticleController {
     }
 
     // 7. Monta o resultado final
-    const finalSummary = verifiedArticles.length === 0
-      ? `${preliminaryResult.summary} Após verificação detalhada dos artigos completos, nenhum conteúdo foi identificado como diretamente desatualizado.`
-      : preliminaryResult.summary;
+    let finalSummary = preliminaryResult.summary;
+    if (verifiedArticles.length === 0) {
+      finalSummary = `${preliminaryResult.summary}\n\n**Atualização Pós-Verificação:** Após a leitura profunda e detalhada dos artigos completos listados acima, a IA revisora concluiu que nenhum deles possui desatualização crítica suficiente que demande alteração de texto.`;
+    } else if (verifiedArticles.length < preliminaryResult.affected_articles.length) {
+      finalSummary = `${preliminaryResult.summary}\n\n**Atualização Pós-Verificação:** Dos artigos inicialmente citados neste resumo, apenas ${verifiedArticles.length} foram confirmados como críticos após a leitura dos textos completos. Os demais foram descartados por não entrarem em conflito direto com a regra.`;
+    }
 
     return {
       affected_articles: verifiedArticles,
