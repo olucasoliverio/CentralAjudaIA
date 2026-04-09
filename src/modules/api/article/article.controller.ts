@@ -138,73 +138,94 @@ export class ArticleController {
     // 1. Gera o embedding da mensagem
     const embedding = await this.aiService.generateEmbedding(body.productMessage);
 
-    // 2. Aumentar drasticamente os chunks buscados (recall profundo)
-    // Anteriormente 12 chunks representavam apenas ~3 artigos, o que escondia o impacto real
+    // 2. Busca recall profundo na base vetorial
     const similarChunks = await this.vectorDbService.semanticSearch(embedding, 80);
 
     if (!similarChunks.length) {
       return { affected_articles: [], summary: 'Nenhum contexto encontrado na base de conhecimento para essa mensagem.' };
     }
 
-    // 3. Busca títulos dos artigos correspondentes
+    // 3. Busca títulos e conteúdo dos artigos correspondentes
     const articleIds = [...new Set(similarChunks.map(c => c.articleId))];
     const articlesInDb = await this.prisma.article.findMany({
       where: { id: { in: articleIds } },
       select: { id: true, title: true, description: true }
     });
 
-    // 4. Formata o contexto para o Passo 1
-    const articlesContext = similarChunks.map((chunk, idx) => {
+    // 4. [MELHORIA #13] Limita o contexto por total de chars (~50k) para não estourar tokens do Gemini
+    const MAX_CONTEXT_CHARS = 50_000;
+    let totalChars = 0;
+    const filteredChunks = similarChunks.filter(chunk => {
+      if (totalChars >= MAX_CONTEXT_CHARS) return false;
+      totalChars += chunk.content.length;
+      return true;
+    });
+
+    // 5. Formata o contexto para o Passo 1
+    const articlesContext = filteredChunks.map((chunk, idx) => {
       const article = articlesInDb.find(a => a.id === chunk.articleId);
       return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo: ${article?.title ?? 'Desconhecido'}\nConteúdo do trecho: ${chunk.content}\n`;
     }).join('\n');
 
-    // 5. Passo 1: análise conservadora com os chunks
+    // 6. Passo 1: análise conservadora com os chunks
     const preliminaryResult = await this.aiService.analyzeImpact(body.productMessage, articlesContext);
 
     if (!preliminaryResult.affected_articles.length) {
       return preliminaryResult;
     }
 
-    // 6. Passo 2: verificação com o artigo COMPLETO para cada candidato
-    const verifiedArticles: AnalyzeImpactResult['affected_articles'] = [];
-
-    for (const candidate of preliminaryResult.affected_articles) {
+    // 7. [MELHORIA #14] Passo 2: verificações em PARALELO usando Promise.allSettled
+    // Antes: sequencial (5 artigos = ~30s). Agora: paralelo (~8s)
+    const verificationTasks = preliminaryResult.affected_articles.map(async (candidate) => {
       const fullArticle = articlesInDb.find(a => a.id === candidate.articleId);
 
-      // Se não encontrou no DB com description, pula (não descarta — mantém candidato)
+      // Se não tem artigo completo, mantém o candidato sem verificação
       if (!fullArticle?.description) {
-        verifiedArticles.push(candidate);
-        continue;
+        return { candidate, verification: null };
       }
 
       const verification = await this.aiService.verifyArticleImpact(
         body.productMessage,
         candidate.affected_excerpt ?? candidate.reason,
         candidate.reason,
-        fullArticle.description, // Fix: sempre passa o artigo completo, nunca o trecho
+        fullArticle.description,
       );
 
-      // Só inclui se a verificação confirmou o impacto
+      return { candidate, verification };
+    });
+
+    const settledResults = await Promise.allSettled(verificationTasks);
+
+    const verifiedArticles: AnalyzeImpactResult['affected_articles'] = [];
+
+    for (const result of settledResults) {
+      if (result.status === 'rejected') continue; // ignora falhas pontuais
+
+      const { candidate, verification } = result.value;
+
+      if (!verification) {
+        // Sem artigo completo no DB — mantém o candidato original
+        verifiedArticles.push(candidate);
+        continue;
+      }
+
       if (verification.confirmed) {
         verifiedArticles.push({
           ...candidate,
-          // Atualiza com os dados mais precisos da verificação completa
           reason: verification.reason,
           affected_excerpt: verification.affected_excerpt ?? candidate.affected_excerpt,
           suggested_update_instruction: verification.suggested_update_instruction ?? candidate.suggested_update_instruction,
-          // Rebaixa o impacto se a confiança for baixa
           impact: verification.confidence === 'BAIXA' ? 'BAIXO' : candidate.impact,
         });
       }
     }
 
-    // 7. Monta o resultado final
+    // 8. Monta o resumo final
     let finalSummary = preliminaryResult.summary;
     if (verifiedArticles.length === 0) {
-      finalSummary = `${preliminaryResult.summary}\n\n**Atualização Pós-Verificação:** Após a leitura profunda e detalhada dos artigos completos listados acima, a IA revisora concluiu que nenhum deles possui desatualização crítica suficiente que demande alteração de texto.`;
+      finalSummary = `${preliminaryResult.summary}\n\n**Atualização Pós-Verificação:** Após a leitura profunda dos artigos completos, a IA revisora concluiu que nenhum deles possui desatualização crítica que demande alteração de texto.`;
     } else if (verifiedArticles.length < preliminaryResult.affected_articles.length) {
-      finalSummary = `${preliminaryResult.summary}\n\n**Atualização Pós-Verificação:** Dos artigos inicialmente citados neste resumo, apenas ${verifiedArticles.length} foram confirmados como críticos após a leitura dos textos completos. Os demais foram descartados por não entrarem em conflito direto com a regra.`;
+      finalSummary = `${preliminaryResult.summary}\n\n**Atualização Pós-Verificação:** Dos artigos citados neste resumo, apenas ${verifiedArticles.length} foram confirmados como críticos após a leitura completa. Os demais foram descartados por não conflitarem diretamente com a atualização.`;
     }
 
     return {
@@ -214,8 +235,25 @@ export class ArticleController {
   }
 
   @Post('analyze-style')
-  async analyzeStyle(@Body() body: { articleContents: string[] }) {
-    const analysis = await this.aiService.analyzeStyle(body.articleContents);
+  // [MELHORIA #11] Aceita agora articleId/freshdeskId além de conteúdo direto
+  async analyzeStyle(@Body() body: {
+    articleContents?: string[];
+    articleId?: string;
+    freshdeskId?: string;
+  }) {
+    let contents: string[] = [];
+
+    if (body.articleContents?.length) {
+      contents = body.articleContents;
+    } else if (body.articleId || body.freshdeskId) {
+      // Busca o artigo pelo ID e usa sua descrição (já em Markdown)
+      const content = await this.fetchContentFromDb(body);
+      contents = [content];
+    } else {
+      throw new Error('Forneça articleContents, articleId ou freshdeskId.');
+    }
+
+    const analysis = await this.aiService.analyzeStyle(contents);
     return analysis;
   }
 

@@ -87,14 +87,15 @@ export function ArticleReviewer() {
   };
 
   const handleStyleAnalysis = async () => {
-    if (inputMode !== 'content' || !articleContent.trim()) {
-      setError('A análise de estilo requer o conteúdo do artigo (modo "Conteúdo").');
-      return;
-    }
+    if (!hasValidInput()) return;
     setLoading(true);
     clearResults();
     try {
-      const data = await api.analyzeStyle([articleContent.trim()]);
+      // [MELHORIA #11] Funciona agora tanto Por ID quanto Por Conteúdo
+      const params = inputMode === 'content'
+        ? { articleContents: [articleContent.trim()] }
+        : getIdParams() as { articleId?: string; freshdeskId?: string };
+      const data = await api.analyzeStyle(params);
       if (data.length > 0) {
         setStyleResult(data[0]);
       }
@@ -269,17 +270,11 @@ export function ArticleReviewer() {
           </div>
         )}
 
-        {activeTab === 'style' && inputMode === 'id' && (
-          <div className="notice-inline">
-            A análise de estilo requer o conteúdo completo do artigo. Mude para o modo "Por Conteúdo".
-          </div>
-        )}
-
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <button
             className="btn btn-primary"
             onClick={handleSubmit}
-            disabled={loading || !hasValidInput() || (activeTab === 'style' && inputMode === 'id')}
+            disabled={loading || !hasValidInput()}
           >
             {loading ? <span className="loading-text">Processando...</span> : getSubmitLabel()}
           </button>

@@ -111,8 +111,8 @@ export const api = {
     return request<QualityScore>('/api/article/quality-score', params);
   },
 
-  analyzeStyle(articleContents: string[]) {
-    return request<StyleAnalysis[]>('/api/article/analyze-style', { articleContents });
+  analyzeStyle(params: { articleContents?: string[]; articleId?: string; freshdeskId?: string }) {
+    return request<StyleAnalysis[]>('/api/article/analyze-style', params);
   },
 
   syncArticles() {
