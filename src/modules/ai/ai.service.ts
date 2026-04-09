@@ -77,8 +77,10 @@ export class AiService {
     if (jsonMatch) {
       try {
         let jsonString = jsonMatch[1] || jsonMatch[0];
-        // Remove escapes markdown inválidos em JSON, como \[ e \]
-        jsonString = jsonString.replace(/\\\[/g, '[').replace(/\\\]/g, ']');
+        // Remove ANY invalid JSON escape sequence (like \>, \*, \_, \], \[)
+        // that the LLM might use to escape Markdown format, keeping valid ones
+        // (\", \\, \/, \b, \f, \n, \r, \t, \u)
+        jsonString = jsonString.replace(/\\([^"\\\/bfnrtu])/g, '$1');
 
         return JSON.parse(jsonString) as T;
       } catch (e) {
