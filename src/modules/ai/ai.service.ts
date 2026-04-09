@@ -262,13 +262,11 @@ export class AiService {
     productMessage: string,
     articlesContext: string,
   ): Promise<AnalyzeImpactResult> {
-    const systemInstruction = ANALYZE_IMPACT_SYSTEM_PROMPT
-      .replace('{productMessage}', productMessage)
-      .replace('{articlesContext}', articlesContext);
+    const systemInstruction = ANALYZE_IMPACT_SYSTEM_PROMPT;
 
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: 'Cruze as informações e retorne o relatório de impacto seguindo estritamente os delimitadores definidos.',
+      contents: `MENSAGEM DE PRODUTO:\n${productMessage}\n\nCONTEXTO DE ARTIGOS:\n${articlesContext}\n\nINSTRUÇÃO: Cruze as informações acima e retorne o relatório de impacto seguindo estritamente os delimitadores definidos.`,
       config: {
         systemInstruction,
         temperature: 0.1,
@@ -276,11 +274,16 @@ export class AiService {
     });
 
     const text = result.text;
+    
     if (!text) {
+      this.logger.warn('Gemini retornou texto vazio na análise de impacto.');
       return { affected_articles: [], summary: 'Não foi possível analisar o impacto' };
     }
     
-    return this.parseImpactReport(text);
+    const cleanText = this.cleanThinkingTags(text);
+    this.logger.debug(`Relatório de impacto bruto: ${cleanText}`);
+    
+    return this.parseImpactReport(cleanText);
   }
 
   // ─── VERIFICAÇÃO DE IMPACTO (Passo 2) ─────────────────────────────
@@ -290,15 +293,11 @@ export class AiService {
     preliminaryReason: string,
     fullArticleContent: string,
   ): Promise<VerifyImpactResult> {
-    const systemInstruction = VERIFY_IMPACT_SYSTEM_PROMPT
-      .replace('{productMessage}', productMessage)
-      .replace('{affectedExcerpt}', affectedExcerpt)
-      .replace('{preliminaryReason}', preliminaryReason)
-      .replace('{fullArticleContent}', fullArticleContent);
+    const systemInstruction = VERIFY_IMPACT_SYSTEM_PROMPT;
 
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: 'Confirme ou descarte o impacto lendo o artigo completo. Siga os delimitadores para retorno.',
+      contents: `MENSAGEM DE PRODUTO:\n${productMessage}\n\nANÁLISE PRELIMINAR:\n- Trecho em alerta: ${affectedExcerpt}\n- Motivo preliminar: ${preliminaryReason}\n\nCONTEÚDO COMPLETO DO ARTIGO:\n${fullArticleContent}\n\nINSTRUÇÃO: Confirme ou descarte o impacto lendo o artigo completo. Siga os delimitadores para retorno.`,
       config: {
         systemInstruction,
         temperature: 0.1,
@@ -307,6 +306,7 @@ export class AiService {
 
     const text = result.text;
     if (!text) {
+      this.logger.warn('Gemini retornou texto vazio na verificação de impacto.');
       return {
         confirmed: false,
         confidence: 'BAIXA',
@@ -316,10 +316,13 @@ export class AiService {
       };
     }
 
-    const metaMatch = text.match(/---META_START---([\s\S]*?)---META_END---/);
-    const reasonMatch = text.match(/---REASON_START---([\s\S]*?)---REASON_END---/);
-    const excerptMatch = text.match(/---EXCERPT_START---([\s\S]*?)---EXCERPT_END---/);
-    const instrMatch = text.match(/---INSTRUCTION_START---([\s\S]*?)---INSTRUCTION_END---/);
+    const cleanText = this.cleanThinkingTags(text);
+    this.logger.debug(`Verificação de impacto bruta: ${cleanText}`);
+
+    const metaMatch = cleanText.match(/---META_START---([\s\S]*?)---META_END---/);
+    const reasonMatch = cleanText.match(/---REASON_START---([\s\S]*?)---REASON_END---/);
+    const excerptMatch = cleanText.match(/---EXCERPT_START---([\s\S]*?)---EXCERPT_END---/);
+    const instrMatch = cleanText.match(/---INSTRUCTION_START---([\s\S]*?)---INSTRUCTION_END---/);
 
     const metaText = metaMatch ? metaMatch[1].trim() : '{"confirmed":false}';
     let meta: any = { confirmed: false, confidence: 'BAIXA' };
