@@ -4,6 +4,7 @@ import { ImpactAnalyzer } from './components/ImpactAnalyzer';
 import { SemanticSearch } from './components/SemanticSearch';
 import { ArticleGenerator } from './components/ArticleGenerator';
 import { ArticleReviewer } from './components/ArticleReviewer';
+import { Login } from './Login';
 import { api } from './api';
 
 type Page = 'impact' | 'search' | 'generator' | 'reviewer';
@@ -25,10 +26,31 @@ function useTheme() {
 }
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('api-key'));
   const [currentPage, setCurrentPage] = useState<Page>('impact');
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const { theme, toggle: toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const handleAuthFailed = () => setIsAuthenticated(false);
+    window.addEventListener('auth-failed', handleAuthFailed);
+    return () => window.removeEventListener('auth-failed', handleAuthFailed);
+  }, []);
+
+  const handleLogin = (key: string) => {
+    localStorage.setItem('api-key', key);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('api-key');
+    setIsAuthenticated(false);
+  };
+
+  if (!isAuthenticated) {
+    return <Login onLogin={handleLogin} />;
+  }
 
   const handleSync = async () => {
     setSyncing(true);
@@ -83,6 +105,9 @@ function App() {
             disabled={syncing}
           >
             {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
+          </button>
+          <button className="btn btn-ghost" onClick={handleLogout} style={{ marginTop: '4px' }}>
+            Sair do Sistema
           </button>
           {syncMessage && (
             <span className="sync-message animate-in">{syncMessage}</span>

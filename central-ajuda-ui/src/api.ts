@@ -1,11 +1,23 @@
-const API_BASE = 'http://localhost:4001';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001';
 
 async function request<T>(endpoint: string, body?: Record<string, unknown>): Promise<T> {
+  const apiKey = localStorage.getItem('api-key') || '';
+  
   const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
+
+  if (res.status === 401 || res.status === 403) {
+    localStorage.removeItem('api-key');
+    window.dispatchEvent(new Event('auth-failed'));
+    throw new Error('Acesso negado. Chave da API inválida.');
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => 'Erro desconhecido');
     throw new Error(text);
