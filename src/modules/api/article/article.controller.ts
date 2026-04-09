@@ -39,9 +39,10 @@ export class ArticleController {
   async search(@Body() body: { query: string; topK?: number }) {
     if (!body.query) throw new Error('Forneça a query de busca.');
     
-    // 1. Busca ampla usando embeddings (Top 20 para ter candidatos suficientes)
+    // 1. O gargalo estava aqui: se a UI pedisse top 15, podiam vir só 15 chunks
+    // que as vezes pertenciam apenas a 3 artigos. Vamos forçar um Recall profundo na base vetorial.
     const embedding = await this.aiService.generateEmbedding(body.query);
-    const results = await this.vectorDbService.semanticSearch(embedding, body.topK || 20);
+    const results = await this.vectorDbService.semanticSearch(embedding, 80); // Busca 80 chunks para varredura
     
     if (!results.length) return [];
 
@@ -64,8 +65,8 @@ export class ArticleController {
       return [];
     }
 
-    // 4. Retorna no formato esperado pelo UI (`SearchResult[]`)
-    return agenticResult.filtered_articles.map(f => {
+    // 4. Retorna no formato esperado pelo UI (`SearchResult[]`) e respeita o topK final
+    const finalData = agenticResult.filtered_articles.map(f => {
       const article = articlesDb.find(a => a.id === f.articleId);
       const originalChunk = results.find(c => c.articleId === f.articleId);
       
@@ -73,9 +74,11 @@ export class ArticleController {
         articleId: f.articleId,
         title: article?.title ?? 'Desconhecido',
         content: f.extracted_answer, // Substitui o chunk cru pela resposta/extração do LLM
-        distance: originalChunk?.distance ?? 1 // Manter a API consistente
+        distance: originalChunk?.distance ?? 1
       };
     });
+
+    return finalData.slice(0, body.topK || 15);
   }
 
   private async fetchContentFromDb(body: any): Promise<string> {
