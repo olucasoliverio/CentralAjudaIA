@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, type SearchResult } from '../api';
+import ReactMarkdown from 'react-markdown';
 
 export function SemanticSearch() {
   const [query, setQuery] = useState('');
@@ -168,7 +169,11 @@ export function SemanticSearch() {
 
                   <div className="search-result-snippet">
                     {result.chunks.slice(0, 2).map((chunk, i) => (
-                      <p key={i}>{chunk.length > 250 ? chunk.slice(0, 250) + '...' : chunk}</p>
+                      <div key={i} className="markdown-snippet">
+                        <ReactMarkdown>
+                          {chunk.length > 250 ? chunk.slice(0, 250) + '...' : chunk}
+                        </ReactMarkdown>
+                      </div>
                     ))}
                     {result.chunks.length > 2 && (
                       <p className="more-chunks">+{result.chunks.length - 2} trechos adicionais</p>

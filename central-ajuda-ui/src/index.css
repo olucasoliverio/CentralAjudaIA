@@ -651,13 +651,31 @@ input::placeholder, textarea::placeholder {
   border: 1px solid var(--border);
 }
 
-.search-result-snippet p {
-  font-size: 0.8125rem;
+.markdown-snippet {
+  font-size: 0.875rem;
   line-height: 1.6;
   color: var(--text-secondary);
 }
 
-.search-result-snippet p + p {
+.markdown-snippet p {
+  margin-bottom: 8px;
+}
+
+.markdown-snippet p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-snippet strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markdown-snippet em {
+  font-style: italic;
+  color: var(--text-primary);
+}
+
+.markdown-snippet + .markdown-snippet {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
