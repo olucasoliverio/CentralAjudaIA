@@ -138,8 +138,9 @@ export class ArticleController {
     // 1. Gera o embedding da mensagem
     const embedding = await this.aiService.generateEmbedding(body.productMessage);
 
-    // 2. Busca mais chunks para ter contexto mais rico (12 em vez de 5)
-    const similarChunks = await this.vectorDbService.semanticSearch(embedding, 12);
+    // 2. Aumentar drasticamente os chunks buscados (recall profundo)
+    // Anteriormente 12 chunks representavam apenas ~3 artigos, o que escondia o impacto real
+    const similarChunks = await this.vectorDbService.semanticSearch(embedding, 80);
 
     if (!similarChunks.length) {
       return { affected_articles: [], summary: 'Nenhum contexto encontrado na base de conhecimento para essa mensagem.' };
