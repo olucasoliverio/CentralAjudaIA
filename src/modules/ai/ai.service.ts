@@ -76,7 +76,11 @@ export class AiService {
       cleanText.match(/```json\s*([\s\S]*?)\s*```/) || cleanText.match(/{[\s\S]*}/);
     if (jsonMatch) {
       try {
-        return JSON.parse(jsonMatch[1] || jsonMatch[0]) as T;
+        let jsonString = jsonMatch[1] || jsonMatch[0];
+        // Remove escapes markdown inválidos em JSON, como \[ e \]
+        jsonString = jsonString.replace(/\\\[/g, '[').replace(/\\\]/g, ']');
+
+        return JSON.parse(jsonString) as T;
       } catch (e) {
         this.logger.error(`Erro ao parsear JSON da IA: ${e.message}`, cleanText);
         throw e;

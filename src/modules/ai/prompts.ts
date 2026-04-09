@@ -329,5 +329,6 @@ Retorne JSON válido contendo:
     }
   ]
 }
+CUIDADO: NUNCA use barras invertidas (\) para escapar colchetes ou parênteses dentro das strings, pois isso quebra o JSON.
 </response_format>
 `;
