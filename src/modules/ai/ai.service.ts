@@ -69,8 +69,8 @@ export class AiService {
 
   // ─── Helper: extrair JSON de resposta da IA ─────────────────────────
   private extractJson<T>(text: string): T {
-    this.cleanThinkingTags(text);
-    const cleanText = text.replace(/<thinking>([\s\S]*?)<\/thinking>/, '').trim();
+    // Loga o <thinking> e retorna o texto sem ele (fix: antes o retorno era descartado)
+    const cleanText = this.cleanThinkingTags(text);
 
     const jsonMatch =
       cleanText.match(/```json\s*([\s\S]*?)\s*```/) || cleanText.match(/{[\s\S]*}/);
@@ -150,8 +150,9 @@ export class AiService {
     currentContent: string,
     whatToChange: string,
   ): Promise<UpdateArticleResult> {
+    // Migrado do fine-tuned para gemini-2.5-flash (fine-tuned não respeitava formato JSON)
     const result = await this.ai.models.generateContent({
-      model: 'projects/548093153407/locations/us-central1/endpoints/8189391851850039296',
+      model: 'gemini-2.5-flash',
       contents: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}`,
       config: {
         systemInstruction: UPDATE_ARTICLE_SYSTEM_PROMPT,

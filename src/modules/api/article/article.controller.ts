@@ -182,7 +182,7 @@ export class ArticleController {
         body.productMessage,
         candidate.affected_excerpt ?? candidate.reason,
         candidate.reason,
-        candidate.affected_excerpt ?? fullArticle.description,
+        fullArticle.description, // Fix: sempre passa o artigo completo, nunca o trecho
       );
 
       // Só inclui se a verificação confirmou o impacto
