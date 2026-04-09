@@ -244,20 +244,23 @@ Identifique quais artigos precisam de atualização direta.
 </task_instructions>
 
 <response_format>
-Retorne um JSON válido:
-{
-  "affected_articles": [
-    {
-      "articleId": "id",
-      "title": "título",
-      "impact": "ALTO" | "MEDIO" | "BAIXO",
-      "affected_excerpt": "trecho exato",
-      "reason": "explicação",
-      "suggested_update_instruction": "instrução direta para a IA"
-    }
-  ],
-  "summary": "resumo geral"
-}
+Retorne EXATAMENTE nesta estrutura de blocos — sem texto adicional fora deles:
+
+---SUMMARY_START---
+[resumo geral aqui]
+---SUMMARY_END---
+
+---AFFECTED_ARTICLES_START---
+ARTICLE_ID: [id]
+TITLE: [título]
+IMPACT: [ALTO|MEDIO|BAIXO]
+REASON: [explicação aqui]
+EXCERPT: [o trecho exato do artigo aqui]
+UPDATE_INSTRUCTION: [instrução direta para a IA aqui]
+---
+ARTICLE_ID: [id]
+...
+---AFFECTED_ARTICLES_END---
 </response_format>
 `;
 
@@ -294,14 +297,26 @@ Confirme se o artigo precisa de atualização baseado nesses dois critérios.
 </task_instructions>
 
 <response_format>
-Retorne um JSON válido:
+Retorne EXATAMENTE nesta estrutura de blocos — sem texto adicional fora deles:
+
+---META_START---
 {
   "confirmed": true | false,
-  "confidence": "ALTA" | "MEDIA" | "BAIXA",
-  "reason": "explicação",
-  "affected_excerpt": "trecho ou null",
-  "suggested_update_instruction": "instrução ou null"
+  "confidence": "ALTA" | "MEDIA" | "BAIXA"
 }
+---META_END---
+
+---REASON_START---
+[sua explicação técnica aqui]
+---REASON_END---
+
+---EXCERPT_START---
+[o trecho afetado ou link/menu incompleto]
+---EXCERPT_END---
+
+---INSTRUCTION_START---
+[a instrução de atualização para a IA]
+---INSTRUCTION_END---
 </response_format>
 `;
 

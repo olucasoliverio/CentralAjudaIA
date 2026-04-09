@@ -69,7 +69,7 @@ export class AiService {
 
   // ─── Helper: extrair JSON de resposta da IA ─────────────────────────
   private extractJson<T>(text: string): T {
-    // Loga o <thinking> e retorna o texto sem ele (fix: antes o retorno era descartado)
+    // Loga o <thinking> e retorna o texto sem ele
     const cleanText = this.cleanThinkingTags(text);
 
     const jsonMatch =
@@ -77,9 +77,7 @@ export class AiService {
     if (jsonMatch) {
       try {
         let jsonString = jsonMatch[1] || jsonMatch[0];
-        // Remove ANY invalid JSON escape sequence (like \>, \*, \_, \], \[)
-        // that the LLM might use to escape Markdown format, keeping valid ones
-        // (\", \\, \/, \b, \f, \n, \r, \t, \u)
+        // Remove escape sequences inválidas que o LLM usa para Markdown dentro de JSON
         jsonString = jsonString.replace(/\\([^"\\\/bfnrtu])/g, '$1');
 
         return JSON.parse(jsonString) as T;
@@ -89,6 +87,42 @@ export class AiService {
       }
     }
     throw new Error('Não foi possível encontrar um JSON válido na resposta da IA.');
+  }
+
+  // ─── Helper: Parse de Resumo de Impacto (Texto Estruturado) ──────────
+  private parseImpactReport(text: string): AnalyzeImpactResult {
+    const summaryMatch = text.match(/---SUMMARY_START---([\s\S]*?)---SUMMARY_END---/);
+    const articlesMatch = text.match(/---AFFECTED_ARTICLES_START---([\s\S]*?)---AFFECTED_ARTICLES_END---/);
+
+    const summary = summaryMatch ? summaryMatch[1].trim() : 'Sem resumo disponível.';
+    const articlesText = articlesMatch ? articlesMatch[1].trim() : '';
+
+    const affected_articles: AnalyzeImpactResult['affected_articles'] = [];
+
+    if (articlesText) {
+      const blocks = articlesText.split('---').map(b => b.trim()).filter(Boolean);
+      for (const block of blocks) {
+        const idMatch = block.match(/ARTICLE_ID:\s*(.*)/);
+        const titleMatch = block.match(/TITLE:\s*(.*)/);
+        const impactMatch = block.match(/IMPACT:\s*(.*)/);
+        const reasonMatch = block.match(/REASON:\s*([\s\S]*?)(?=EXCERPT:|$)/);
+        const excerptMatch = block.match(/EXCERPT:\s*([\s\S]*?)(?=UPDATE_INSTRUCTION:|$)/);
+        const instrMatch = block.match(/UPDATE_INSTRUCTION:\s*([\s\S]*?)$/);
+
+        if (idMatch) {
+          affected_articles.push({
+            articleId: idMatch[1].trim(),
+            title: titleMatch ? titleMatch[1].trim() : 'Sem título',
+            impact: (impactMatch ? impactMatch[1].trim().toUpperCase() : 'BAIXO') as any,
+            reason: reasonMatch ? reasonMatch[1].trim() : 'Sem motivo especificado.',
+            affected_excerpt: excerptMatch ? excerptMatch[1].trim() : undefined,
+            suggested_update_instruction: instrMatch ? instrMatch[1].trim() : 'Atualizar conforme PRD.',
+          });
+        }
+      }
+    }
+
+    return { summary, affected_articles };
   }
 
   // ─── EMBEDDINGS VIA VERTEX AI (text-multilingual-embedding-002) ────
@@ -234,18 +268,19 @@ export class AiService {
 
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: 'Cruze as informações e retorne o JSON de impacto. Seja conservador: só inclua artigos com conteúdo diretamente desatualizado.',
+      contents: 'Cruze as informações e retorne o relatório de impacto seguindo estritamente os delimitadores definidos.',
       config: {
         systemInstruction,
         temperature: 0.1,
       },
     });
 
-    const content = result.text;
-    if (!content) {
+    const text = result.text;
+    if (!text) {
       return { affected_articles: [], summary: 'Não foi possível analisar o impacto' };
     }
-    return this.extractJson<AnalyzeImpactResult>(content);
+    
+    return this.parseImpactReport(text);
   }
 
   // ─── VERIFICAÇÃO DE IMPACTO (Passo 2) ─────────────────────────────
@@ -263,15 +298,15 @@ export class AiService {
 
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: 'Confirme ou descarte o impacto lendo o artigo completo. Seja rigoroso.',
+      contents: 'Confirme ou descarte o impacto lendo o artigo completo. Siga os delimitadores para retorno.',
       config: {
         systemInstruction,
         temperature: 0.1,
       },
     });
 
-    const content = result.text;
-    if (!content) {
+    const text = result.text;
+    if (!text) {
       return {
         confirmed: false,
         confidence: 'BAIXA',
@@ -280,7 +315,25 @@ export class AiService {
         suggested_update_instruction: null,
       };
     }
-    return this.extractJson<VerifyImpactResult>(content);
+
+    const metaMatch = text.match(/---META_START---([\s\S]*?)---META_END---/);
+    const reasonMatch = text.match(/---REASON_START---([\s\S]*?)---REASON_END---/);
+    const excerptMatch = text.match(/---EXCERPT_START---([\s\S]*?)---EXCERPT_END---/);
+    const instrMatch = text.match(/---INSTRUCTION_START---([\s\S]*?)---INSTRUCTION_END---/);
+
+    const metaText = metaMatch ? metaMatch[1].trim() : '{"confirmed":false}';
+    let meta: any = { confirmed: false, confidence: 'BAIXA' };
+    try {
+      meta = this.extractJson<any>(metaText);
+    } catch { /* ignora erro de meta, usa default */ }
+
+    return {
+      confirmed: meta.confirmed ?? false,
+      confidence: meta.confidence ?? 'BAIXA',
+      reason: reasonMatch ? reasonMatch[1].trim() : 'Sem explicação.',
+      affected_excerpt: excerptMatch ? excerptMatch[1].trim() : null,
+      suggested_update_instruction: instrMatch ? instrMatch[1].trim() : null,
+    };
   }
 
   // ─── BUSCA AGÊNTICA ─────────────────────────────────────────────
