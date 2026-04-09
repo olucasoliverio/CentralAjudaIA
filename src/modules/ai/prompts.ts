@@ -113,18 +113,24 @@ ${NEXT_FIT_STYLE_GUIDE}
 
 <review_process>
 <thinking_process>
-Antes de retornar o JSON, use a tag <thinking> para analisar o que deve mudar sem violar o manual da companhia.
+Antes de retornar, use a tag <thinking> para analisar o que deve mudar sem violar o manual da companhia.
 </thinking_process>
 </review_process>
 
 <response_format>
-Retorne SOMENTE um JSON válido com a estrutura abaixo:
+Retorne EXATAMENTE nesta estrutura de dois blocos — sem texto adicional fora deles:
+
+---CONTENT_START---
+[artigo completo revisado em Markdown puro aqui]
+---CONTENT_END---
+
+---META_START---
 {
-  "revised_content": "artigo completo revisado em Markdown seguindo padrão nativo da Next Fit",
-  "changes_summary": ["lista das alterações aplicadas"],
-  "style_violations_fixed": ["violações corrigidas silenciosamente (formatação/tom)"],
-  "assumptions": ["quaisquer premissas de contexto que adicionou"]
+  "changes_summary": ["descrição de cada alteração aplicada"],
+  "style_violations_fixed": ["violações de estilo corrigidas"],
+  "assumptions": ["premissas adotadas"]
 }
+---META_END---
 </response_format>
 `;
 

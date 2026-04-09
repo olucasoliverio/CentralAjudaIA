@@ -150,7 +150,6 @@ export class AiService {
     currentContent: string,
     whatToChange: string,
   ): Promise<UpdateArticleResult> {
-    // Migrado do fine-tuned para gemini-2.5-flash (fine-tuned não respeitava formato JSON)
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}`,
@@ -160,11 +159,35 @@ export class AiService {
       },
     });
 
-    const content = result.text;
-    if (!content) {
+    const text = result.text;
+    if (!text) {
       return { revised_content: '', changes_summary: [], style_violations_fixed: [], assumptions: [] };
     }
-    return this.extractJson<UpdateArticleResult>(content);
+
+    // Extração robusta via delimitadores para evitar quebras de JSON.parse com Markdown longo
+    const contentMatch = text.match(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/);
+    const metaMatch = text.match(/---META_START---([\s\S]*?)---META_END---/);
+
+    const revised_content = contentMatch ? contentMatch[1].trim() : '';
+    const metaText = metaMatch ? metaMatch[1].trim() : '{}';
+
+    try {
+      const meta = this.extractJson<any>(metaText);
+      return {
+        revised_content,
+        changes_summary: meta.changes_summary ?? [],
+        style_violations_fixed: meta.style_violations_fixed ?? [],
+        assumptions: meta.assumptions ?? [],
+      };
+    } catch (e) {
+      this.logger.error(`Erro ao processar metadados da revisão: ${e.message}`);
+      return {
+        revised_content,
+        changes_summary: ['A revisão foi aplicada, mas houve um erro ao processar o resumo das mudanças.'],
+        style_violations_fixed: [],
+        assumptions: [],
+      };
+    }
   }
 
   // ─── ANÁLISE DE ESTILO / PADRÃO ────────────────────────────────────
