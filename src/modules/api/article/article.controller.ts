@@ -38,20 +38,42 @@ export class ArticleController {
   @Post('search')
   async search(@Body() body: { query: string; topK?: number }) {
     if (!body.query) throw new Error('Forneça a query de busca.');
-    const embedding = await this.aiService.generateEmbedding(body.query);
-    const results = await this.vectorDbService.semanticSearch(embedding, body.topK || 5);
     
+    // 1. Busca ampla usando embeddings (Top 20 para ter candidatos suficientes)
+    const embedding = await this.aiService.generateEmbedding(body.query);
+    const results = await this.vectorDbService.semanticSearch(embedding, body.topK || 20);
+    
+    if (!results.length) return [];
+
     const articleIds = [...new Set(results.map(c => c.articleId))];
     const articlesDb = await this.prisma.article.findMany({
       where: { id: { in: articleIds } },
       select: { id: true, title: true }
     });
 
-    return results.map(r => {
-      const article = articlesDb.find(a => a.id === r.articleId);
+    // 2. Transforma em formato para o LLM avaliar
+    const articlesContext = results.map((chunk, idx) => {
+      const article = articlesDb.find(a => a.id === chunk.articleId);
+      return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo: ${article?.title ?? 'Desconhecido'}\nConteúdo do trecho: ${chunk.content}\n`;
+    }).join('\n');
+
+    // 3. Aplica o filtro de instrução via IA
+    const agenticResult = await this.aiService.filterArticlesByInstruction(body.query, articlesContext);
+
+    if (!agenticResult.filtered_articles || agenticResult.filtered_articles.length === 0) {
+      return [];
+    }
+
+    // 4. Retorna no formato esperado pelo UI (`SearchResult[]`)
+    return agenticResult.filtered_articles.map(f => {
+      const article = articlesDb.find(a => a.id === f.articleId);
+      const originalChunk = results.find(c => c.articleId === f.articleId);
+      
       return {
-        ...r,
-        title: article?.title ?? 'Desconhecido'
+        articleId: f.articleId,
+        title: article?.title ?? 'Desconhecido',
+        content: f.extracted_answer, // Substitui o chunk cru pela resposta/extração do LLM
+        distance: originalChunk?.distance ?? 1 // Manter a API consistente
       };
     });
   }

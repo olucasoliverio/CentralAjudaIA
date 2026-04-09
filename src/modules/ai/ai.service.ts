@@ -8,6 +8,7 @@ import {
   QUALITY_SCORE_PROMPT,
   ANALYZE_IMPACT_SYSTEM_PROMPT,
   VERIFY_IMPACT_SYSTEM_PROMPT,
+  AGENTIC_SEARCH_SYSTEM_PROMPT,
 } from './prompts';
 
 export interface AnalyzeImpactResult {
@@ -35,6 +36,13 @@ export interface VerifyImpactResult {
   reason: string;
   affected_excerpt: string | null;
   suggested_update_instruction: string | null;
+}
+
+export interface AgenticSearchResult {
+  filtered_articles: {
+    articleId: string;
+    extracted_answer: string;
+  }[];
 }
 
 @Injectable()
@@ -253,5 +261,31 @@ ${context}
       };
     }
     return this.extractJson<VerifyImpactResult>(content);
+  }
+
+  // ─── BUSCA AGÊNTICA ─────────────────────────────────────────────
+  async filterArticlesByInstruction(
+    userInstruction: string,
+    articlesContext: string,
+  ): Promise<AgenticSearchResult> {
+    const systemInstruction = AGENTIC_SEARCH_SYSTEM_PROMPT
+      .replace('{userInstruction}', userInstruction)
+      .replace('{articlesCandidates}', articlesContext);
+
+    const result = await this.ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: 'Avalie os artigos com base na instrução requerida.',
+      config: {
+        systemInstruction,
+        temperature: 0.1,
+      },
+    });
+
+    const content = result.text;
+    if (!content) {
+      return { filtered_articles: [] };
+    }
+    
+    return this.extractJson<AgenticSearchResult>(content);
   }
 }
