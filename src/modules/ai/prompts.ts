@@ -222,9 +222,12 @@ Sua tarefa é ler uma MENSAGEM DE ATUALIZAÇÃO DE PRODUTO e cruzar com TRECHOS 
 </articles_context>
 
 <inclusion_criteria>
-- SEJA CONSERVADOR: Um artigo SÓ deve ser incluído se o trecho recuperado contém uma instrução, valor, nome de menu, fluxo ou comportamento que a atualização de produto diretamente contradiz ou torna obsoleto.
-- NÃO inclua se a mudança é apenas uma adição que não afeta o que já existe.
-- NÃO inclua se o contexto é superficial (ex: apenas cita o módulo num link).
+Um artigo DEVE ser incluído se qualquer um dos casos abaixo for verdadeiro:
+1. O trecho contém uma instrução, valor, nome de menu, fluxo ou comportamento que a <product_message> diretamente contradiz ou torna obsoleto.
+2. O trecho lista opções, métodos ou funcionalidades (ex: formas de pagamento, tipos de plano, permíssões) e a <product_message> adiciona ou remove um item dessa lista — tornando o artigo INCOMPLETO ou DESATUALIZADO.
+3. O trecho menciona um comportamento padrão que foi alterado pela atualização.
+
+NÃO inclua APENAS se o contexto for puramente superficial (ex: o artigo simplesmente linkeia para outro módulo sem descrevê-lo).
 </inclusion_criteria>
 
 <task_instructions>

@@ -152,16 +152,31 @@ export class ArticleController {
       select: { id: true, title: true, description: true }
     });
 
-    // 4. [MELHORIA #13] Limita o contexto por total de chars (~50k) para não estourar tokens do Gemini
-    const MAX_CONTEXT_CHARS = 50_000;
+    // 4. Garante representação de todos os artigos únicos antes de cortar por tamanho
+    // Estratégia: 1 chunk por artigo (o melhor) primeiro, depois preenche com demais até o limite
+    const seenArticles = new Set<string>();
+    const priorityChunks: typeof similarChunks = [];
+    const restChunks: typeof similarChunks = [];
+
+    for (const chunk of similarChunks) {
+      if (!seenArticles.has(chunk.articleId)) {
+        seenArticles.add(chunk.articleId);
+        priorityChunks.push(chunk); // Primeiro chunk de cada artigo (mais relevante)
+      } else {
+        restChunks.push(chunk);
+      }
+    }
+
+    // Combina: artigos únicos primeiro, depois chunks extras, limitado a 80k chars
+    const MAX_CONTEXT_CHARS = 80_000;
     let totalChars = 0;
-    const filteredChunks = similarChunks.filter(chunk => {
+    const filteredChunks = [...priorityChunks, ...restChunks].filter(chunk => {
       if (totalChars >= MAX_CONTEXT_CHARS) return false;
       totalChars += chunk.content.length;
       return true;
     });
 
-    // 5. Formata o contexto para o Passo 1
+    // 5. Formata o contexto para o Passo 1 (inclui título junto ao trecho para melhor contexto)
     const articlesContext = filteredChunks.map((chunk, idx) => {
       const article = articlesInDb.find(a => a.id === chunk.articleId);
       return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo: ${article?.title ?? 'Desconhecido'}\nConteúdo do trecho: ${chunk.content}\n`;
