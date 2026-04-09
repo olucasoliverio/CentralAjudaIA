@@ -124,34 +124,24 @@ export class AiService {
 
   // ─── GERAÇÃO DE ARTIGO RAG ──────────────────────────────────────────
   async generateArticleRAG(prompt: string, contextChunks: string[]): Promise<string> {
-    const context = contextChunks.join('\n\n---\n\n');
-    
-    // O modelo Fine-Tunned (SFT) surta se o System Prompt for muito diferente do que ele viu no treino.
-    // Usamos o system prompt original do treinamento.
-    const systemInstruction = "Você é o redator oficial da Central de Ajuda da Next Fit. Geração de artigos técnicos. Seja conciso, use tom imperativo e estruture os passos em narrativa flúida sem listas numeradas.";
+    // Monta contexto resumido — evita dump de artigos completos com imagens
+    const context = contextChunks
+      .map((chunk, i) => `[Referência ${i + 1}]\n${chunk.slice(0, 600)}`)
+      .join('\n\n---\n\n');
 
-    const userPrompt = `
-Gere APENAS 1 ÚNICO artigo sobre a intenção/PRD abaixo. 
-Siga o tom da Next Fit. NUNCA resuma ou liste os artigos de referência do RAG.
-Seu corpo de texto DEVE ser sobre a "Mensagem do Usuário".
-
-[MENSAGEM DO USUÁRIO / PRD]
-${prompt}
-
-[ARTIGOS DE REFERÊNCIA ANTIGOS / VOCABULÁRIO RAG]
-${context}
-`;
+    const systemInstruction = GENERATE_ARTICLE_SYSTEM_PROMPT.replace('{context}', context);
 
     const result = await this.ai.models.generateContent({
-      model: 'projects/548093153407/locations/us-central1/endpoints/8189391851850039296',
-      contents: userPrompt,
+      model: 'gemini-2.5-flash',
+      contents: `Escreva um artigo completo para a Central de Ajuda Next Fit com base nesta PRD/instrução:\n\n${prompt}`,
       config: {
         systemInstruction,
-        temperature: 0.1,
+        temperature: 0.2,
       },
     });
 
     const text = result.text ?? '';
+    // Remove bloco <thinking> e retorna apenas o artigo em Markdown
     return this.cleanThinkingTags(text);
   }
 
