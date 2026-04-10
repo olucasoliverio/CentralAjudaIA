@@ -187,17 +187,26 @@ export class AiService {
     const systemInstruction = UPDATE_ARTICLE_SYSTEM_PROMPT;
 
     try {
+      // Log COMPLETO estruturado do que será enviado ao Gemini
+      this.logger.warn('╔════════════════════════════════════════════════════════════════════');
+      this.logger.warn('║ INICIANDO REVISÃO DE ARTIGO (updateArticle)');
+      this.logger.warn('╚════════════════════════════════════════════════════════════════════');
+      
+      this.logger.log(`📝 Tamanho do artigo: ${currentContent.length} caracteres`);
+      this.logger.log(`📝 Tamanho da instrução: ${whatToChange.length} caracteres`);
+      this.logger.log(`📝 Instrução solicitada: "${whatToChange}"`);
+
+      const fullPrompt = `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}\n\nINSTRUÇÃO: Aplique as alterações no artigo e retorne EXATAMENTE no formato de blocos ---CONTENT_START--- e ---META_START--- definido nas instruções de sistema.`;
+      this.logger.log(`📊 Tamanho total do prompt (artigo + instrução): ${fullPrompt.length} caracteres`);
+
       const result = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}\n\nINSTRUÇÃO: Aplique as alterações no artigo e retorne EXATAMENTE no formato de blocos ---CONTENT_START--- e ---META_START--- definido nas instruções de sistema.`,
+        contents: fullPrompt,
         config: {
           systemInstruction,
           temperature: 0.2,
         },
       });
-
-      // Log detalhado da resposta
-      this.logger.debug(`Gemini Response: ${JSON.stringify(result)}`);
 
       // Acessa o texto corretamente na estrutura de resposta do Gemini
       const candidates = (result as any).candidates || [];
@@ -206,15 +215,22 @@ export class AiService {
         text = candidates[0].content.parts[0].text || '';
       }
 
+      // Log estruturado da resposta
+      this.logger.warn('╔════════════════════════════════════════════════════════════════════');
+      this.logger.warn('║ RESPOSTA RECEBIDA DO GEMINI');
+      this.logger.warn('╚════════════════════════════════════════════════════════════════════');
+      this.logger.log(`🔍 Tamanho do texto retornado: ${text.length} caracteres`);
+      this.logger.log(`🔍 finishReason: ${candidates[0]?.finishReason}`);
+      this.logger.log(`🔍 candidates.length: ${candidates.length}`);
+      this.logger.log(`📋 TEXTO COMPLETO RETORNADO:\n${JSON.stringify(text)}`);
+      this.logger.log(`📋 RESPOSTA JSON COMPLETA:\n${JSON.stringify(candidates, null, 2)}`);
+
       if (!text) {
         // Verifique se há erro ou se é um problema de formato de resposta
-        this.logger.error('Gemini retornou texto vazio no updateArticle.', {
-          resultKeys: Object.keys(result),
-          candidatesLength: candidates.length,
-          finishReason: candidates[0]?.finishReason,
-          fullResult: JSON.stringify(result),
-        });
-        return { revised_content: '', changes_summary: [], style_violations_fixed: [], assumptions: [] };
+        this.logger.error('❌ Gemini retornou texto vazio no updateArticle.');
+        this.logger.error(`Result keys: ${Object.keys(result).join(', ')}`);
+        this.logger.error(`Full response: ${JSON.stringify(result, null, 2)}`);
+        return { revised_content: '', changes_summary: ['Gemini retornou resposta vazia'], style_violations_fixed: [], assumptions: [] };
       }
 
       const cleanText = this.cleanThinkingTags(text);
