@@ -199,6 +199,8 @@ export class AiService {
       const fullPrompt = `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}\n\nINSTRUÇÃO: Aplique as alterações no artigo e retorne EXATAMENTE no formato de blocos ---CONTENT_START--- e ---META_START--- definido nas instruções de sistema.`;
       this.logger.log(`📊 Tamanho total do prompt (artigo + instrução): ${fullPrompt.length} caracteres`);
 
+      // PRIMEIRA TENTATIVA: com systemInstruction
+      this.logger.log('🔄 Tentativa #1: Com systemInstruction');
       const result = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: fullPrompt,
@@ -222,15 +224,57 @@ export class AiService {
       this.logger.log(`🔍 Tamanho do texto retornado: ${text.length} caracteres`);
       this.logger.log(`🔍 finishReason: ${candidates[0]?.finishReason}`);
       this.logger.log(`🔍 candidates.length: ${candidates.length}`);
-      this.logger.log(`📋 TEXTO COMPLETO RETORNADO:\n${JSON.stringify(text)}`);
-      this.logger.log(`📋 RESPOSTA JSON COMPLETA:\n${JSON.stringify(candidates, null, 2)}`);
 
+      // SE RETORNOU VAZIO, TENTA SEGUNDA CHAMADA SEM systemInstruction
       if (!text) {
-        // Verifique se há erro ou se é um problema de formato de resposta
-        this.logger.error('❌ Gemini retornou texto vazio no updateArticle.');
-        this.logger.error(`Result keys: ${Object.keys(result).join(', ')}`);
-        this.logger.error(`Full response: ${JSON.stringify(result, null, 2)}`);
-        return { revised_content: '', changes_summary: ['Gemini retornou resposta vazia'], style_violations_fixed: [], assumptions: [] };
+        this.logger.warn('⚠️  Gemini retornou vazio na tentativa #1. Tentando #2 SEM systemInstruction...');
+        
+        // Prompt simplificado e direto
+        const simplifiedPrompt = `Você é um revisor de artigos especializado em documentação técnica.
+
+Artigo atual:
+${currentContent}
+
+Alterações solicitadas:
+${whatToChange}
+
+Faça as alterações solicitadas no artigo e retorne EXATAMENTE neste formato:
+
+---CONTENT_START---
+[artigo revisado completo]
+---CONTENT_END---
+
+---META_START---
+{"changes_summary": ["mudança 1", "mudança 2"], "style_violations_fixed": [], "assumptions": []}
+---META_END---
+
+Não adicione nenhum texto fora desses blocos.`;
+
+        const result2 = await this.ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: simplifiedPrompt,
+          config: {
+            temperature: 0.2,
+            // SEM systemInstruction nesta tentativa
+          },
+        });
+
+        const candidates2 = (result2 as any).candidates || [];
+        if (candidates2.length > 0 && candidates2[0].content?.parts?.length > 0) {
+          text = candidates2[0].content.parts[0].text || '';
+        }
+
+        this.logger.log(`🔄 Tentativa #2 retornou: ${text.length > 0 ? `✅ ${text.length} caracteres` : '❌ vazio'}`);
+
+        if (!text) {
+          this.logger.error('❌ Ambas as tentativas retornaram vazio. Problema pode ser:');
+          this.logger.error('   1. Safety filter do Gemini bloqueando conteúdo');
+          this.logger.error('   2. Instrução confundindo o modelo');
+          this.logger.error('   3. Problema na API do Vertex AI');
+          this.logger.error(`Result keys: ${Object.keys(result).join(', ')}`);
+          this.logger.error(`finishReason: ${candidates[0]?.finishReason}, ${candidates2[0]?.finishReason}`);
+          return { revised_content: '', changes_summary: ['Falha ao processar revisão em ambas as tentativas'], style_violations_fixed: [], assumptions: [] };
+        }
       }
 
       const cleanText = this.cleanThinkingTags(text);
