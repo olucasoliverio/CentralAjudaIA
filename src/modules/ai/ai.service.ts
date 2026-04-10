@@ -202,21 +202,61 @@ export class AiService {
     }
 
     const cleanText = this.cleanThinkingTags(text);
-    this.logger.debug(`Revisão bruta recebida: ${cleanText}`);
+    this.logger.debug(`Revisão bruta recebida: ${cleanText.slice(0, 200)}...`);
     
     // Extração robusta via delimitadores (insensível a case)
-    const contentMatch = cleanText.match(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/i);
-    const metaMatch = cleanText.match(/---META_START---([\s\S]*?)---META_END---/i);
+    // Tenta múltiplas variações de regex para ser mais tolerante
+    let contentMatch = cleanText.match(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/i);
+    if (!contentMatch) {
+      // Fallback: tenta com quebras de linha diferentes
+      contentMatch = cleanText.match(/---CONTENT_START---\n([\s\S]*?)\n---CONTENT_END---/i);
+    }
+    if (!contentMatch) {
+      // Fallback: tenta sem os traços
+      contentMatch = cleanText.match(/CONTENT_START([\s\S]*?)CONTENT_END/i);
+    }
 
     let revised_content = contentMatch ? contentMatch[1].trim() : '';
     
-    // Fallback: se não encontrou delimitadores mas a IA respondeu algo substancial,
-    // não deixa o usuário com a tela vazia.
+    // Fallback robusto: se não encontrou delimitadores mas há conteúdo,
+    // tenta extrair a parte que parece Markdown (começa com # ou está entre META_END e fim)
     if (!revised_content && cleanText.length > 100) {
-      this.logger.warn('Protocolo de blocos falhou no updateArticle, usando fallback de texto bruto.');
-      revised_content = cleanText;
+      this.logger.warn('Protocolo de blocos falhou, tentando fallback inteligente');
+      
+      // Tenta extrair tudo após META_END (que é o último bloco)
+      const metaEndIdx = cleanText.indexOf('---META_END---');
+      if (metaEndIdx > -1) {
+        // Há conteúdo antes do META_END, que é o artigo revisado
+        const beforeMetaEnd = cleanText.substring(0, metaEndIdx);
+        const contentEndIdx = beforeMetaEnd.lastIndexOf('---CONTENT_END---');
+        if (contentEndIdx > -1) {
+          const contentStartIdx = beforeMetaEnd.lastIndexOf('---CONTENT_START---');
+          if (contentStartIdx > -1) {
+            revised_content = beforeMetaEnd.substring(contentStartIdx + '---CONTENT_START---'.length, contentEndIdx).trim();
+          }
+        }
+      }
+      
+      // Último fallback: se ainda assim não encontrou, usa todo o cleanText
+      // mas remove blocos de metadados
+      if (!revised_content) {
+        this.logger.warn('Usando fallback final: texto bruto sem delimitadores');
+        revised_content = cleanText
+          .replace(/---META_START---([\s\S]*?)---META_END---/i, '')
+          .replace(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/i, '')
+          .trim();
+        // Se ainda está vazio, usa tudo
+        if (!revised_content) {
+          revised_content = cleanText;
+        }
+      }
     }
 
+    // Extrai metadados
+    let metaMatch = cleanText.match(/---META_START---([\s\S]*?)---META_END---/i);
+    if (!metaMatch) {
+      metaMatch = cleanText.match(/---META_START---\n([\s\S]*?)\n---META_END---/i);
+    }
     const metaText = metaMatch ? metaMatch[1].trim() : '{}';
 
     try {
