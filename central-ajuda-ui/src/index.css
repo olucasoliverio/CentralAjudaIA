@@ -212,6 +212,27 @@ p { color: var(--text-secondary); }
   background: var(--accent-subtle);
 }
 
+.btn-palette-toggle {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.btn-palette-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  background: var(--accent-subtle);
+}
+
 .btn-sync {
   width: 100%;
   padding: 10px 14px;

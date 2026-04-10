@@ -12,6 +12,11 @@ interface ColorCategory {
   colors: ColorItem[];
 }
 
+interface ColorPaletteProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
 const colorCategories: ColorCategory[] = [
   {
     title: '📌 Módulos',
@@ -71,7 +76,7 @@ const colorCategories: ColorCategory[] = [
   },
 ];
 
-export function ColorPalette() {
+export function ColorPalette({ isOpen, onClose }: ColorPaletteProps) {
   const [copiedHex, setCopiedHex] = useState<string | null>(null);
 
   const handleCopyColor = async (hex: string) => {
@@ -85,43 +90,55 @@ export function ColorPalette() {
   };
 
   return (
-    <div className="color-palette-container">
-      <div className="color-palette-header">
-        <h1>🎨 Paleta de Cores - NextFit</h1>
-        <p className="color-palette-subtitle">Clique em qualquer cor para copiar seu código HEX</p>
-      </div>
+    <>
+      {/* Overlay backdrop */}
+      {isOpen && (
+        <div className="color-palette-backdrop" onClick={onClose} />
+      )}
 
-      {colorCategories.map((category) => (
-        <div key={category.title} className="color-section">
-          <h2 className="color-section-title">{category.title}</h2>
-          <div className="color-grid">
-            {category.colors.map((color) => (
-              <div
-                key={`${category.title}-${color.hex}`}
-                className="color-item"
-                onClick={() => handleCopyColor(color.hex)}
-                title={`Clique para copiar: ${color.hex}`}
-              >
-                <div
-                  className="color-swatch"
-                  style={{ backgroundColor: color.hex }}
-                >
-                  {copiedHex === color.hex && (
-                    <div className="copy-feedback">✓ Copiado!</div>
-                  )}
-                </div>
-                <div className="color-info">
-                  <div className="color-name">{color.name}</div>
-                  <div className="color-hex">{color.hex}</div>
-                  {color.description && (
-                    <div className="color-description">{color.description}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Sidebar */}
+      <aside className={`color-palette-sidebar ${isOpen ? 'open' : ''}`}>
+        <div className="color-palette-header">
+          <h2>🎨 Paleta de Cores</h2>
+          <button className="color-palette-close" onClick={onClose} title="Fechar">
+            ✕
+          </button>
         </div>
-      ))}
-    </div>
+
+        <div className="color-palette-content">
+          {colorCategories.map((category) => (
+            <div key={category.title} className="color-section">
+              <h3 className="color-section-title">{category.title}</h3>
+              <div className="color-grid">
+                {category.colors.map((color) => (
+                  <div
+                    key={`${category.title}-${color.hex}`}
+                    className="color-item"
+                    onClick={() => handleCopyColor(color.hex)}
+                    title={`Clique para copiar: ${color.hex}`}
+                  >
+                    <div
+                      className="color-swatch"
+                      style={{ backgroundColor: color.hex }}
+                    >
+                      {copiedHex === color.hex && (
+                        <div className="copy-feedback">✓ Copiado!</div>
+                      )}
+                    </div>
+                    <div className="color-info">
+                      <div className="color-name">{color.name}</div>
+                      <div className="color-hex">{color.hex}</div>
+                      {color.description && (
+                        <div className="color-description">{color.description}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+    </>
   );
 }
