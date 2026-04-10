@@ -28,8 +28,9 @@ export class SyncService {
         await this.syncArticle(article);
       }
       this.logger.log('Sync finished successfully.');
-    } catch (e) {
-      this.logger.error('Error in sync process', e?.message || e);
+    } catch (e: unknown) {
+      const error = e as Error;
+      this.logger.error('Error in sync process', error?.message || String(e));
     }
   }
 
@@ -77,8 +78,9 @@ export class SyncService {
               tokenCount: Math.ceil(text.length / 4),
             });
           }
-        } catch (embError) {
-           this.logger.error(`Gemini embedding failed for article ${article.id}`);
+        } catch (embError: unknown) {
+          const error = embError as Error;
+           this.logger.error(`Gemini embedding failed for article ${article.id}`, error?.message || String(embError));
            throw embError;
         }
       }
@@ -92,8 +94,9 @@ export class SyncService {
         freshdeskUpdatedAt,
         chunksData,
       );
-    } catch (e) {
-      this.logger.error(`Failed to process article ${article.id}`, e?.message || e);
+    } catch (e: unknown) {
+      const error = e as Error;
+      this.logger.error(`Failed to process article ${article.id}`, error?.message || String(e));
     }
   }
 }

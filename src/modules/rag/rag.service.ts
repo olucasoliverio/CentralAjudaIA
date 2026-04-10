@@ -10,6 +10,8 @@ export interface RagCtxChunk {
   recencyScore: number;
   isGolden: boolean;
   finalScore: number;
+  category: string | null;
+  tags: string[];
 }
 
 export interface RagContext {
@@ -111,6 +113,7 @@ export class RagService {
         content: string;
         distance: number;
         freshdeskUpdatedAt: Date | null;
+        category: string | null;
         tags: string[];
       }>
     >(
@@ -120,6 +123,7 @@ export class RagService {
         c.content, 
         (embedding <=> $1::vector) as distance,
         a."freshdeskUpdatedAt",
+        a.category,
         a.tags
        FROM chunks c
        JOIN articles a ON c."articleId" = a.id
@@ -137,6 +141,8 @@ export class RagService {
       recencyScore: this.calculateRecencyScore(r.freshdeskUpdatedAt),
       isGolden: this.GOLDEN_ARTICLE_IDS.has(r.articleId) || r.tags?.includes('golden'),
       finalScore: 0, // Será calculado depois
+      category: r.category,
+      tags: r.tags || [],
     }));
   }
 
@@ -208,15 +214,77 @@ export class RagService {
       .map((chunk, idx) => {
         const goldenLabel = chunk.isGolden ? ' [GOLDEN]' : '';
         const scoreLabel = `(relevância: ${(chunk.finalScore * 100).toFixed(0)}%)`;
+        const categoryLabel = chunk.category ? `\n<article_category>${chunk.category}</article_category>` : '';
+        const tagsLabel = chunk.tags.length > 0 ? `\n<article_tags>${chunk.tags.join(', ')}</article_tags>` : '';
         return (
           `<rag_reference index="${idx + 1}"${chunk.isGolden ? ' golden="true"' : ''}>\n` +
           `<article_title>${chunk.title}${goldenLabel}</article_title>\n` +
-          `<article_id>${chunk.articleId}</article_id>\n` +
-          `<relevance_score>${scoreLabel}</relevance_score>\n` +
+          `<article_id>${chunk.articleId}</article_id>` +
+          categoryLabel +
+          tagsLabel +
+          `\n<relevance_score>${scoreLabel}</relevance_score>\n` +
           `<content>\n${chunk.content.slice(0, 800)}\n</content>\n` +
           `</rag_reference>`
         );
       })
       .join('\n\n');
+  }
+
+  /**
+   * Extrai links markdown do tipo [texto](slug-ou-url) do artigo
+   * Usado para descobrir artigos relacionados que podem ser impactados
+   */
+  extractLinksFromArticle(content: string): string[] {
+    // Regex para [texto](url) em markdown
+    const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    const links: string[] = [];
+    let match;
+
+    while ((match = linkRegex.exec(content)) !== null) {
+      const [, text, url] = match;
+      // Remove https://... para pegar só a parte relevante
+      const slug = url.replace(/^https?:\/\/[^/]+\/(pt-BR\/)?/i, '').replace(/\?.*/, '');
+      if (slug && slug.length > 0 && !slug.startsWith('http')) {
+        links.push(slug);
+      }
+    }
+
+    return [...new Set(links)]; // Remove duplicatas
+  }
+
+  /**
+   * Encontra artigos pelo padrão do slug/título
+   * Usado para resolver links mencionados na análise
+   */
+  async findArticlesByPattern(pattern: string): Promise<RagCtxChunk[]> {
+    const articles = await this.prisma.article.findMany({
+      where: {
+        OR: [
+          { title: { contains: pattern, mode: 'insensitive' } },
+          { description: { contains: pattern, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        category: true,
+        tags: true,
+        freshdeskUpdatedAt: true,
+      },
+      take: 3, // Top 3 matches
+    });
+
+    return articles.map((a) => ({
+      articleId: a.id,
+      title: a.title,
+      content: a.description.slice(0, 1000), // Primeiro 1000 chars
+      distance: 0, // Não é busca semântica
+      recencyScore: this.calculateRecencyScore(a.freshdeskUpdatedAt),
+      isGolden: this.GOLDEN_ARTICLE_IDS.has(a.id) || a.tags?.includes('golden'),
+      finalScore: 0.8, // Boost por ser descoberto via link
+      category: a.category,
+      tags: a.tags || [],
+    }));
   }
 }

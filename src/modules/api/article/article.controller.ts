@@ -19,8 +19,8 @@ export class ArticleController {
     //    - Busca 20 chunks
     //    - Re-ranking por: relevância semântica, recência, golden articles
     //    - Agrupa por artigo (evita dominar com um só artigo)
-    //    - Seleciona top 5 referências
-    const ragContext = await this.ragService.buildContext(body.prompt, 5);
+    //    - Seleciona top 7 referências (aumentado de 5 para melhor cobertura)
+    const ragContext = await this.ragService.buildContext(body.prompt, 7);
 
     // 2. Geração com contexto RAG estruturado + Guia de Estilo Next Fit via Gemini
     const content = await this.aiService.generateArticleRAG(body.prompt, [
@@ -143,8 +143,8 @@ export class ArticleController {
     // 1. Constrói contexto RAG com re-ranking inteligente
     //    - Busca 20 chunks com scoring multi-critério
     //    - Agrupa por artigo (evita dominar)
-    //    - Seleciona top 8 referências (mais chunks que generate, pois é análise)
-    const ragContext = await this.ragService.buildContext(body.productMessage, 8);
+    //    - Seleciona top 12 referências (aumentado de 8 para melhor cobertura)
+    const ragContext = await this.ragService.buildContext(body.productMessage, 12);
 
     if (!ragContext.chunks.length) {
       return {
@@ -174,10 +174,39 @@ export class ArticleController {
       return preliminaryResult;
     }
 
+    // 6.5. [MELHORIA] Link Discovery: se um artigo foi marcado como impactado,
+    //      encontrar artigos que linkam para ele para verificação adicional
+    const linkedArticlesToVerify = new Set<string>();
+    for (const affected of preliminaryResult.affected_articles) {
+      const fullArticle = articlesInDb.find(a => a.id === affected.articleId);
+      if (fullArticle?.description) {
+        // Extrair links deste artigo
+        const links = this.ragService.extractLinksFromArticle(fullArticle.description);
+        for (const linkPattern of links) {
+          // Buscar artigos que matcham com o padrão do link
+          const linkedArticles = await this.ragService.findArticlesByPattern(linkPattern);
+          for (const linked of linkedArticles) {
+            linkedArticlesToVerify.add(linked.articleId);
+          }
+        }
+      }
+    }
+
+    // Adiciona artigos descobertos via link à lista de verificação
+    const allArticleIdsToVerify = new Set([
+      ...preliminaryResult.affected_articles.map(a => a.articleId),
+      ...linkedArticlesToVerify,
+    ]);
+    const allArticlesInDb = await this.prisma.article.findMany({
+      where: { id: { in: Array.from(allArticleIdsToVerify) } },
+      select: { id: true, title: true, description: true },
+    });
+
     // 7. [MELHORIA #14] Passo 2: verificações em PARALELO usando Promise.allSettled
     // Antes: sequencial (5 artigos = ~30s). Agora: paralelo (~8s)
+    // Verifica tanto artigos encontrados na análise quanto artigos descobertos via link
     const verificationTasks = preliminaryResult.affected_articles.map(async (candidate) => {
-      const fullArticle = articlesInDb.find(a => a.id === candidate.articleId);
+      const fullArticle = allArticlesInDb.find(a => a.id === candidate.articleId);
 
       // Se não tem artigo completo, mantém o candidato sem verificação
       if (!fullArticle?.description) {
