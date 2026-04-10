@@ -199,13 +199,19 @@ export class AiService {
       // Log detalhado da resposta
       this.logger.debug(`Gemini Response: ${JSON.stringify(result)}`);
 
-      const text = result.text;
+      // Acessa o texto corretamente na estrutura de resposta do Gemini
+      const candidates = (result as any).candidates || [];
+      let text = '';
+      if (candidates.length > 0 && candidates[0].content?.parts?.length > 0) {
+        text = candidates[0].content.parts[0].text || '';
+      }
+
       if (!text) {
         // Verifique se há erro ou se é um problema de formato de resposta
         this.logger.error('Gemini retornou texto vazio no updateArticle.', {
           resultKeys: Object.keys(result),
-          resultStatus: (result as any).status,
-          resultError: (result as any).error,
+          candidatesLength: candidates.length,
+          finishReason: candidates[0]?.finishReason,
           fullResult: JSON.stringify(result),
         });
         return { revised_content: '', changes_summary: [], style_violations_fixed: [], assumptions: [] };
