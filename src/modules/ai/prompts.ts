@@ -63,21 +63,14 @@ ${NEXT_FIT_STYLE_GUIDE}
 </rag_context>
 
 <anti_hallucination_protocol>
-1. A SUA FONTE DE VERDADE para entender como a nova funcionalidade funciona é EXCLUSIVAMENTE a mensagem do usuário (o PRD).
-2. O <rag_context> acima contém artigos antigos trazidos pela busca semântica para servir apenas como **referência estrutural e vocabulário**. NUNCA copie caminhos de menu ou regras de negócio do <rag_context> como sendo verdadeiros para o novo artigo.
-3. Você é CEGO em relação a regras não citadas pelo usuário.
-4. Se a mensagem do usuário (PRD) NÃO disser o caminho EXATO do menu principal de acesso, coloque obrigatoriamente: **[ATENÇÃO: INSERIR CAMINHO DO MENU AQUI]**. NUNCA invente ou presuma caminhos.
+1. FONTE DE VERDADE: Tudo que você precisa saber está nos DADOS BRUTOS (PRD) do prompt do usuário.
+2. REFERÊNCIAS: Use <rag_context> APENAS para entender tom, estrutura e formato. NUNCA copie regras de negócio ou paths de UI.
+3. CAMINHOS DE MENU: Se o PRD disser o caminho, use. Se NÃO disser, coloque: **[CAMINHO DO MENU: inserir aqui]**. Nunca invente.
+4. FUNCIONALIDADES: Você só conhece o que está no PRD.
 </anti_hallucination_protocol>
 
 <task_instructions>
-<thinking_process>
-Antes de gerar o artigo, OBRIGATORIAMENTE abra a tag <thinking> e responda:
-PERGUNTA 1: O texto do PRD (mensagem do usuário) informa o caminho EXATO do menu para acessar a tela? (Sim/Não)
-PERGUNTA 2: Se Sim, qual é a citação exata? 
-PERGUNTA 3: Se Não, qual placeholder usarei obrigatoriamente?
-</thinking_process>
-
-Após o <thinking>, gere o artigo em Markdown seguindo ESTA ESTRUTURA EXATA E INEGOCIÁVEL:
+Gere o artigo em Markdown seguindo ESTA ESTRUTURA EXATA E INEGOCIÁVEL:
 1. Título H1 (Ex: # Como configurar o Link de Autocadastro?)
 2. ABERTURA OBRIGATÓRIA (Primeira linha de texto após o título, sem exceções): "Olá! Neste tutorial você irá aprender como **[inserir o título ou ação central do artigo em negrito]**!"
 3. Introdução: Um parágrafo curto vendendo o valor e a "dor" que a ferramenta resolve.
@@ -112,10 +105,7 @@ ${NEXT_FIT_STYLE_GUIDE}
 </preservation_rules>
 
 <review_process>
-<thinking_process>
-Antes de retornar, use a tag <thinking> para analisar o que deve mudar sem violar o manual da companhia.
-</thinking_process>
-</review_process>
+Retorne a revisão seguindo o formato de resposta definido abaixo.
 
 <response_format>
 Retorne EXATAMENTE nesta estrutura de dois blocos — sem texto adicional fora deles:
@@ -149,9 +139,6 @@ ${NEXT_FIT_STYLE_GUIDE}
 </style_guide_context>
 
 <task_description>
-<thinking_process>
-Antes de gerar a análise, use a tag <thinking> para avaliar o texto em relação a cada regra do <style_guide_context>.
-</thinking_process>
 Analise o artigo e identifique:
 1. Se segue a abertura e fechamento padrão.
 2. Nível de concisão.
@@ -193,9 +180,6 @@ ${NEXT_FIT_STYLE_GUIDE}
 </style_guide_context>
 
 <task_instructions>
-<thinking_process>
-Use a tag <thinking> para listar as violações encontradas antes de atribuir a nota final no JSON.
-</thinking_process>
 Avalie a qualidade técnica e de redação. Retorne APENAS o JSON.
 </task_instructions>
 
@@ -234,9 +218,6 @@ NÃO inclua APENAS se o contexto for puramente superficial (ex: o artigo simples
 </inclusion_criteria>
 
 <task_instructions>
-<thinking_process>
-Use a tag <thinking> para analisar cada trecho de <articles_context> em relação à <product_message> antes de montar a lista final.
-</thinking_process>
 Identifique quais artigos precisam de atualização direta.
 </task_instructions>
 
@@ -277,11 +258,6 @@ Sua tarefa é confirmar ou descartar o impacto de uma mudança de produto em um 
 </strategy>
 
 <task_instructions>
-<thinking_process>
-Use a tag <thinking> para validar se o comportamento alterado pela <product_message> afeta o <full_article_content>. O artigo DEVE ser atualizado se:
-1) Contiver uma informação que se tornou literalmente falsa ou contraditória com a nova atualização.
-Ou 2) Contiver uma lista (ex: de formas de pagamento) ou fluxo onde a nova funcionalidade DEVERIA obrigatoriamente estar para não deixar o cliente desinformado.
-</thinking_process>
 Confirme se o artigo precisa de atualização baseado nesses dois critérios.
 </task_instructions>
 
@@ -328,9 +304,6 @@ Sua tarefa é ler um conjunto de artigos candidatos e atuar como um filtro super
 </articles_candidates>
 
 <task_instructions>
-<thinking_process>
-Use a tag <thinking> para avaliar se CADA artigo em <articles_candidates> atende perfeitamente à <user_instruction>. Exemplo: se o usuário pede artigos que "citam o valor que o cliente tem que pagar", rejeite os que apenas falam de pagamentos sem o valor exato, e aceite apenas os que respondem perfeitamente à condição lógica.
-</thinking_process>
 Retorne uma lista SOMENTE com os artigos que foram aprovados. Extraia a resposta ou trecho que justifique a aprovação.
 </task_instructions>
 

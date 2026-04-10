@@ -158,16 +158,16 @@ export class AiService {
 
   // ─── GERAÇÃO DE ARTIGO RAG ──────────────────────────────────────────
   async generateArticleRAG(prompt: string, contextChunks: string[]): Promise<string> {
-    // Monta contexto resumido — evita dump de artigos completos com imagens
+    // Monta contexto expandido — 1500 chars para capturar contexto técnico completo
     const context = contextChunks
-      .map((chunk, i) => `[Referência ${i + 1}]\n${chunk.slice(0, 600)}`)
+      .map((chunk, i) => `[Referência ${i + 1}]\n${chunk.slice(0, 1500)}`)
       .join('\n\n---\n\n');
 
     const systemInstruction = GENERATE_ARTICLE_SYSTEM_PROMPT.replace('{context}', context);
 
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Escreva um artigo completo para a Central de Ajuda Next Fit com base nesta PRD/instrução:\n\n${prompt}`,
+      contents: `DADOS BRUTOS / PRD (fonte de verdade):\n${prompt}\n\n---\n\nINSTRUÇÃO: Gere um artigo completo para a Central de Ajuda Next Fit seguindo EXATAMENTE o padrão do guia de estilo. Baseie-se nas referências abaixo apenas para ESTRUTURA e VOCABULÁRIO, nunca para copiar paths ou regras de negócio. Tudo o que você precisa saber sobre a funcionalidade está nos DADOS BRUTOS acima.`,
       config: {
         systemInstruction,
         temperature: 0.2,
