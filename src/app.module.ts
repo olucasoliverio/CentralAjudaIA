@@ -9,6 +9,7 @@ import { VectorDbModule } from './modules/vector-db/vector-db.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ApiModule } from './modules/api/api.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RagModule } from './modules/rag/rag.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ContentModule,
     AiModule,
     VectorDbModule,
+    RagModule,
     QueueModule,
     ApiModule,
     PrismaModule,

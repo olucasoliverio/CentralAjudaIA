@@ -36,18 +36,13 @@ export class SyncService {
   async syncArticle(article: any) {
     try {
       // BUSCAR SE JÁ EXISTE NO BANCO E O ÚLTIMO UPDATE
-      const exists = await this.prisma.article.findUnique({
+      const exists = (await this.prisma.article.findUnique({
         where: { freshdeskId: article.id.toString() },
-        select: {
-          id: true,
-          freshdeskUpdatedAt: true,
-          _count: { select: { chunks: true } }
-        }
-      });
+      })) as any;
 
       const freshdeskUpdatedAt = new Date(article.updated_at);
 
-      if (exists && exists._count.chunks > 0 && exists.freshdeskUpdatedAt) {
+      if (exists && exists.freshdeskUpdatedAt) {
         if (freshdeskUpdatedAt <= new Date(exists.freshdeskUpdatedAt)) {
           this.logger.log(`[PULANDO] Article já sincronizado e sem alterações: ${article.title}`);
           return;

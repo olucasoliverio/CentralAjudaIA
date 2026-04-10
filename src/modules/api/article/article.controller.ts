@@ -1,6 +1,7 @@
 import { Controller, Post, Body, NotFoundException } from '@nestjs/common';
 import { AiService, UpdateArticleResult, AnalyzeImpactResult } from '../../ai/ai.service';
 import { VectorDbService } from '../../vector-db/vector-db.service';
+import { RagService } from '../../rag/rag.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Controller('api/article')
@@ -8,25 +9,29 @@ export class ArticleController {
   constructor(
     private readonly aiService: AiService,
     private readonly vectorDbService: VectorDbService,
+    private readonly ragService: RagService,
     private readonly prisma: PrismaService,
   ) { }
 
   @Post('generate')
   async generateArticle(@Body() body: { prompt: string }) {
-    // 1. Embedding da intenção via Gemini (grátis)
-    const promptEmbedding = await this.aiService.generateEmbedding(body.prompt);
+    // 1. Constrói contexto RAG com re-ranking inteligente
+    //    - Busca 20 chunks
+    //    - Re-ranking por: relevância semântica, recência, golden articles
+    //    - Agrupa por artigo (evita dominar com um só artigo)
+    //    - Seleciona top 5 referências
+    const ragContext = await this.ragService.buildContext(body.prompt, 5);
 
-    // 2. Busca semântica — 5 chunks resumidos como referência de vocabulário/estrutura
-    const similarChunks = await this.vectorDbService.semanticSearch(promptEmbedding, 5);
-    const context = similarChunks.map((c) => c.content);
+    // 2. Geração com contexto RAG estruturado + Guia de Estilo Next Fit via Gemini
+    const content = await this.aiService.generateArticleRAG(body.prompt, [
+      ragContext.formattedContext,
+    ]);
 
-    // 3. Geração com contexto RAG + Guia de Estilo Next Fit via Gemini
-    const content = await this.aiService.generateArticleRAG(body.prompt, context);
-
-    const articleIds = [...new Set(similarChunks.map(c => c.articleId))];
+    // 3. Retorna artigos fonte
+    const sourceArticleIds = ragContext.chunks.map((c) => c.articleId);
     const articlesDb = await this.prisma.article.findMany({
-      where: { id: { in: articleIds } },
-      select: { id: true, title: true }
+      where: { id: { in: sourceArticleIds } },
+      select: { id: true, title: true },
     });
 
     return {
@@ -135,52 +140,32 @@ export class ArticleController {
       throw new Error('Forneça a MENSAGEM DO TIME DE PRODUTO (productMessage)');
     }
 
-    // 1. Gera o embedding da mensagem
-    const embedding = await this.aiService.generateEmbedding(body.productMessage);
+    // 1. Constrói contexto RAG com re-ranking inteligente
+    //    - Busca 20 chunks com scoring multi-critério
+    //    - Agrupa por artigo (evita dominar)
+    //    - Seleciona top 8 referências (mais chunks que generate, pois é análise)
+    const ragContext = await this.ragService.buildContext(body.productMessage, 8);
 
-    // 2. Busca recall profundo na base vetorial
-    const similarChunks = await this.vectorDbService.semanticSearch(embedding, 80);
-
-    if (!similarChunks.length) {
-      return { affected_articles: [], summary: 'Nenhum contexto encontrado na base de conhecimento para essa mensagem.' };
+    if (!ragContext.chunks.length) {
+      return {
+        affected_articles: [],
+        summary: 'Nenhum contexto encontrado na base de conhecimento para essa mensagem.',
+      };
     }
 
-    // 3. Busca títulos e conteúdo dos artigos correspondentes
-    const articleIds = [...new Set(similarChunks.map(c => c.articleId))];
+    // 2. Busca artigos completos para verificações no Passo 2
+    const articleIds = ragContext.chunks.map((c) => c.articleId);
     const articlesInDb = await this.prisma.article.findMany({
       where: { id: { in: articleIds } },
-      select: { id: true, title: true, description: true }
+      select: { id: true, title: true, description: true },
     });
 
-    // 4. Garante representação de todos os artigos únicos antes de cortar por tamanho
-    // Estratégia: 1 chunk por artigo (o melhor) primeiro, depois preenche com demais até o limite
-    const seenArticles = new Set<string>();
-    const priorityChunks: typeof similarChunks = [];
-    const restChunks: typeof similarChunks = [];
-
-    for (const chunk of similarChunks) {
-      if (!seenArticles.has(chunk.articleId)) {
-        seenArticles.add(chunk.articleId);
-        priorityChunks.push(chunk); // Primeiro chunk de cada artigo (mais relevante)
-      } else {
-        restChunks.push(chunk);
-      }
-    }
-
-    // Combina: artigos únicos primeiro, depois chunks extras, limitado a 80k chars
-    const MAX_CONTEXT_CHARS = 80_000;
-    let totalChars = 0;
-    const filteredChunks = [...priorityChunks, ...restChunks].filter(chunk => {
-      if (totalChars >= MAX_CONTEXT_CHARS) return false;
-      totalChars += chunk.content.length;
-      return true;
-    });
-
-    // 5. Formata o contexto para o Passo 1 (inclui título junto ao trecho para melhor contexto)
-    const articlesContext = filteredChunks.map((chunk, idx) => {
-      const article = articlesInDb.find(a => a.id === chunk.articleId);
-      return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo: ${article?.title ?? 'Desconhecido'}\nConteúdo do trecho: ${chunk.content}\n`;
-    }).join('\n');
+    // 3. Formata o contexto para o Passo 1 (já otimizado pelo RAG)
+    const articlesContext = ragContext.chunks
+      .map((chunk, idx) => {
+        return `--- TRECHO ${idx + 1} ---\nArtigo ID: ${chunk.articleId}\nTítulo: ${chunk.title}\nConteúdo do trecho: ${chunk.content}\n`;
+      })
+      .join('\n');
 
     // 6. Passo 1: análise conservadora com os chunks
     const preliminaryResult = await this.aiService.analyzeImpact(body.productMessage, articlesContext);
