@@ -4,10 +4,11 @@ import { ImpactAnalyzer } from './components/ImpactAnalyzer';
 import { SemanticSearch } from './components/SemanticSearch';
 import { ArticleGenerator } from './components/ArticleGenerator';
 import { ArticleReviewer } from './components/ArticleReviewer';
+import { ColorPalette } from './components/ColorPalette';
 import { Login } from './Login';
 import { api } from './api';
 
-type Page = 'impact' | 'search' | 'generator' | 'reviewer';
+type Page = 'impact' | 'search' | 'generator' | 'reviewer' | 'colors';
 type Theme = 'light' | 'dark';
 
 function useTheme() {
@@ -71,6 +72,7 @@ function App() {
     { key: 'search', label: 'Busca Semântica' },
     { key: 'generator', label: 'Gerador de Artigos' },
     { key: 'reviewer', label: 'Revisor de Artigos' },
+    { key: 'colors', label: 'Paleta de Cores' },
   ];
 
   return (
@@ -122,6 +124,7 @@ function App() {
           {currentPage === 'search' && <SemanticSearch />}
           {currentPage === 'generator' && <ArticleGenerator />}
           {currentPage === 'reviewer' && <ArticleReviewer />}
+          {currentPage === 'colors' && <ColorPalette />}
         </div>
       </main>
     </div>
