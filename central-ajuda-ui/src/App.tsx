@@ -98,9 +98,6 @@ function App() {
 
         <div className="sidebar-footer">
           <div className="sidebar-divider" />
-          <button className="btn btn-palette-toggle" onClick={() => setColorPaletteOpen(true)} title="Abrir paleta de cores">
-            🎨 Paleta de Cores
-          </button>
           <button className="btn btn-theme-toggle" onClick={toggleTheme}>
             {theme === 'light' ? 'Modo Escuro' : 'Modo Claro'}
           </button>
@@ -123,9 +120,9 @@ function App() {
       {/* Main Content */}
       <main className="main-content">
         <div className="main-inner">
-          {currentPage === 'impact' && <ImpactAnalyzer />}
+          {currentPage === 'impact' && <ImpactAnalyzer onTogglePalette={() => setColorPaletteOpen(true)} />}
           {currentPage === 'search' && <SemanticSearch />}
-          {currentPage === 'generator' && <ArticleGenerator />}
+          {currentPage === 'generator' && <ArticleGenerator onTogglePalette={() => setColorPaletteOpen(true)} />}
           {currentPage === 'reviewer' && <ArticleReviewer />}
         </div>
       </main>

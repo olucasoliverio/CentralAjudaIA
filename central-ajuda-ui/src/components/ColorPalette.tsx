@@ -77,35 +77,31 @@ const colorCategories: ColorCategory[] = [
 ];
 
 export function ColorPalette({ isOpen, onClose }: ColorPaletteProps) {
-  const [copiedHex, setCopiedHex] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleCopyColor = async (hex: string) => {
+  const handleCopyHex = async (hex: string) => {
     try {
       await navigator.clipboard.writeText(hex);
-      setCopiedHex(hex);
-      setTimeout(() => setCopiedHex(null), 2000);
+      setCopiedId(hex);
+      setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
-      console.error('Erro ao copiar cor:', err);
+      console.error('Erro ao copiar', err);
     }
   };
 
   return (
     <>
-      {/* Overlay backdrop */}
-      {isOpen && (
-        <div className="color-palette-backdrop" onClick={onClose} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`color-palette-sidebar ${isOpen ? 'open' : ''}`}>
+      {/* Sidebar Flutuante Overlay */}
+      <aside className={`color-palette-drawer ${isOpen ? 'open' : ''}`}>
         <div className="color-palette-header">
-          <h2>🎨 Paleta de Cores</h2>
+          <h2>Paleta de Cores</h2>
           <button className="color-palette-close" onClick={onClose} title="Fechar">
             ✕
           </button>
         </div>
 
         <div className="color-palette-content">
+          <p className="color-instruction">Clique em uma cor para copiar seu HEX.</p>
           {colorCategories.map((category) => (
             <div key={category.title} className="color-section">
               <h3 className="color-section-title">{category.title}</h3>
@@ -113,23 +109,16 @@ export function ColorPalette({ isOpen, onClose }: ColorPaletteProps) {
                 {category.colors.map((color) => (
                   <div
                     key={`${category.title}-${color.hex}`}
-                    className="color-item"
-                    onClick={() => handleCopyColor(color.hex)}
-                    title={`Clique para copiar: ${color.hex}`}
+                    className="color-swatch-wrapper"
+                    onClick={() => handleCopyHex(color.hex)}
+                    title={`${color.name} (${color.hex})\n${color.description || ''}`}
                   >
                     <div
                       className="color-swatch"
                       style={{ backgroundColor: color.hex }}
                     >
-                      {copiedHex === color.hex && (
-                        <div className="copy-feedback">✓ Copiado!</div>
-                      )}
-                    </div>
-                    <div className="color-info">
-                      <div className="color-name">{color.name}</div>
-                      <div className="color-hex">{color.hex}</div>
-                      {color.description && (
-                        <div className="color-description">{color.description}</div>
+                      {copiedId === color.hex && (
+                        <div className="copy-feedback">copiado!</div>
                       )}
                     </div>
                   </div>

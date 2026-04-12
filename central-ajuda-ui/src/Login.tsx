@@ -16,26 +16,30 @@ export function Login({ onLogin }: Props) {
 
   return (
     <div className="login-container">
+      {/* Elemento decorativo de fundo extra para o Login */}
+      <div className="login-ambient" />
+      
       <div className="login-card animate-in">
         <div className="login-header">
+          <div className="login-logo-placeholder"></div>
           <h2>Next Fit AI</h2>
-          <p>Central de Ajuda — Acesso Restrito</p>
+          <p>Abertura de Sessão Restrita</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          <div>
-            <label htmlFor="api-key">Chave de Acesso</label>
+          <div className="input-group">
+            <label htmlFor="api-key">Chave de Acesso da API (Vertex/Gemini)</label>
             <input
               id="api-key"
               type="password"
-              placeholder="Digite a chave da API..."
+              placeholder="Ex: AIzaSy..."
               value={key}
               onChange={(e) => setKey(e.target.value)}
               autoFocus
             />
           </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '8px' }}>
-            Acessar Sistema
+          <button type="submit" className="btn btn-primary btn-block">
+            Autenticar e Entrar
           </button>
         </form>
       </div>

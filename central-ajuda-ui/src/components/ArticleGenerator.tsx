@@ -5,7 +5,11 @@ import { HelpCenterPreview } from './HelpCenterPreview';
 import { GenerationHistoryPanel } from './GenerationHistoryPanel';
 import { useGenerationHistory } from '../hooks/useGenerationHistory';
 
-export function ArticleGenerator() {
+interface Props {
+  onTogglePalette?: () => void;
+}
+
+export function ArticleGenerator({ onTogglePalette }: Props) {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
@@ -52,19 +56,30 @@ export function ArticleGenerator() {
             <h1>Gerador de Artigos</h1>
             <p>Gere novos artigos para a Central de Ajuda usando RAG + Gemini Next Fit.</p>
           </div>
-          <button
-            id="history-toggle-btn"
-            className={`btn btn-secondary ${showHistory ? 'active' : ''}`}
-            onClick={() => setShowHistory(v => !v)}
-            style={{ flexShrink: 0, position: 'relative' }}
-          >
-            Histórico
-            {history.length > 0 && (
-              <span className="nav-badge" style={{ position: 'absolute', top: '-6px', right: '-6px' }}>
-                {history.length}
-              </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onTogglePalette && (
+              <button
+                className="btn btn-secondary"
+                onClick={onTogglePalette}
+                style={{ flexShrink: 0 }}
+              >
+                Paleta de Cores
+              </button>
             )}
-          </button>
+            <button
+              id="history-toggle-btn"
+              className={`btn btn-secondary ${showHistory ? 'active' : ''}`}
+              onClick={() => setShowHistory(v => !v)}
+              style={{ flexShrink: 0, position: 'relative' }}
+            >
+              Histórico
+              {history.length > 0 && (
+                <span className="nav-badge" style={{ position: 'absolute', top: '-6px', right: '-6px' }}>
+                  {history.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
