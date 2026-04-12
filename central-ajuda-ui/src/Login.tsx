@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api } from './api';
 
 interface Props {
   onLogin: (key: string) => void;
@@ -6,17 +7,27 @@ interface Props {
 
 export function Login({ onLogin }: Props) {
   const [key, setKey] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (key.trim()) {
+    if (!key.trim()) return;
+
+    setLoading(true);
+    setError(false);
+
+    const isValid = await api.validateKey(key.trim());
+    if (isValid) {
       onLogin(key.trim());
+    } else {
+      setError(true);
+      setLoading(false);
     }
   };
 
   return (
     <div className="login-container">
-      {/* Elemento decorativo de fundo extra para o Login */}
       <div className="login-ambient" />
       
       <div className="login-card animate-in">
@@ -34,12 +45,18 @@ export function Login({ onLogin }: Props) {
               type="password"
               placeholder="Ex: AIzaSy..."
               value={key}
-              onChange={(e) => setKey(e.target.value)}
+              onChange={(e) => {
+                setKey(e.target.value);
+                setError(false); // remove feedback de erro ao digitar
+              }}
               autoFocus
+              className={error ? 'input-error' : ''}
+              style={error ? { borderColor: 'var(--danger)' } : {}}
             />
+            {error && <span style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '4px' }}>Chave incorreta ou sem permissão de acesso.</span>}
           </div>
-          <button type="submit" className="btn btn-primary btn-block">
-            Autenticar e Entrar
+          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+            {loading ? 'Validando Acesso...' : 'Autenticar e Entrar'}
           </button>
         </form>
       </div>

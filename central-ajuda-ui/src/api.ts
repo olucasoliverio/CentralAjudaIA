@@ -118,4 +118,17 @@ export const api = {
   syncArticles() {
     return request<{ message: string }>('/api/sync-articles');
   },
+
+  async validateKey(apiKeyToTest?: string): Promise<boolean> {
+    const key = apiKeyToTest || localStorage.getItem('api-key') || '';
+    try {
+      const res = await fetch(`${API_BASE}/`, {
+        method: 'GET',
+        headers: { 'x-api-key': key }
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
 };
