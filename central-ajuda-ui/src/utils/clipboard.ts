@@ -62,10 +62,6 @@ function markdownToHtml(markdown: string): string {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed) {
-      if (inBlock) { result.push('</p>'); inBlock = false; }
-      continue;
-    }
     
     // Identifica se a linha é o início/fim de um bloco HTML em nível de raiz
     const isBlock = /^\s*<\/?(h\d|ul|ol|li|hr|img|pre|div|blockquote|table|thead|tbody|tr|td|th|style|script|iframe)(>|\s)/i.test(trimmed);
@@ -75,8 +71,12 @@ function markdownToHtml(markdown: string): string {
       if (inBlock) { result.push('</p>'); inBlock = false; }
       result.push(trimmed);
     } else if (isBr) {
-      // Ignora <br> isolados, deixamos o CSS (margin-bottom) dar o espaçamento adequado.
       if (inBlock) { result.push('</p>'); inBlock = false; }
+      result.push('<p><br></p>');
+    } else if (!trimmed) {
+      // Quando encontrar linha vazia, fecha o bloco atual e insere um parágrafo vazio simulando um Enter
+      if (inBlock) { result.push('</p>'); inBlock = false; }
+      result.push('<p><br></p>');
     } else if (!inBlock) {
       result.push(`<p>${trimmed}`);
       inBlock = true;
@@ -86,10 +86,10 @@ function markdownToHtml(markdown: string): string {
   }
   if (inBlock) result.push('</p>');
 
-  // Limpa possíveis parágrafos vazios gerados inadvertidamente
   let finalHtml = result.join('\n');
-  finalHtml = finalHtml.replace(/<p>\s*<\/p>/g, '');
-  finalHtml = finalHtml.replace(/<p>\s*<br\s*\/?>\s*<\/p>/g, '');
+  
+  // Limpa possíveis duplicações excessivas de parágrafos vazios gerados
+  finalHtml = finalHtml.replace(/(<p><br><\/p>\n*){2,}/g, '<p><br></p>\n');
 
   return finalHtml;
 }
@@ -120,10 +120,10 @@ function applyNextFitStyles(html: string): string {
     '<h4 style="font-family:Verdana,sans-serif;font-size:14px;font-weight:bold;color:#264966;text-align:justify;margin:14px 0 6px 0;line-height:1.4;">$1</h4>'
   );
 
-  // p — Parágrafo: Verdana 14px, #264966, justificado
+  // p — Parágrafo: Verdana 14px, #264966, justificado, margem 0 para evitar herança ao dar Enter
   html = html.replace(
     /<p>([\s\S]*?)<\/p>/g,
-    '<p style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;text-align:justify;margin:0 0 12px 0;line-height:1.6;">$1</p>'
+    '<p style="font-family:Verdana,sans-serif;font-size:14px;color:#264966;text-align:justify;margin:0;line-height:1.5;">$1</p>'
   );
 
   // strong — Texto de atenção: Verdana 14px, bold, roxo #833AB4
