@@ -89,37 +89,30 @@ export class AiService {
     throw new Error('Não foi possível encontrar um JSON válido na resposta da IA.');
   }
 
-  // ─── Helper: Parse de Resumo de Impacto (Texto Estruturado) ──────────
+  // ─── Helper: Parse de Resumo de Impacto (XML/JSON) ──────────
   private parseImpactReport(text: string): AnalyzeImpactResult {
-    const summaryMatch = text.match(/---SUMMARY_START---([\s\S]*?)---SUMMARY_END---/);
-    const articlesMatch = text.match(/---AFFECTED_ARTICLES_START---([\s\S]*?)---AFFECTED_ARTICLES_END---/);
+    const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
+    const articlesMatch = text.match(/<affected_articles>([\s\S]*?)<\/affected_articles>/i);
 
     const summary = summaryMatch ? summaryMatch[1].trim() : 'Sem resumo disponível.';
-    const articlesText = articlesMatch ? articlesMatch[1].trim() : '';
+    const articlesJsonStr = articlesMatch ? articlesMatch[1].trim() : '[]';
 
-    const affected_articles: AnalyzeImpactResult['affected_articles'] = [];
+    let affected_articles: AnalyzeImpactResult['affected_articles'] = [];
 
-    if (articlesText) {
-      const blocks = articlesText.split('---').map(b => b.trim()).filter(Boolean);
-      for (const block of blocks) {
-        const idMatch = block.match(/ARTICLE_ID:\s*(.*)/);
-        const titleMatch = block.match(/TITLE:\s*(.*)/);
-        const impactMatch = block.match(/IMPACT:\s*(.*)/);
-        const reasonMatch = block.match(/REASON:\s*([\s\S]*?)(?=EXCERPT:|$)/);
-        const excerptMatch = block.match(/EXCERPT:\s*([\s\S]*?)(?=UPDATE_INSTRUCTION:|$)/);
-        const instrMatch = block.match(/UPDATE_INSTRUCTION:\s*([\s\S]*?)$/);
-
-        if (idMatch) {
-          affected_articles.push({
-            articleId: idMatch[1].trim(),
-            title: titleMatch ? titleMatch[1].trim() : 'Sem título',
-            impact: (impactMatch ? impactMatch[1].trim().toUpperCase() : 'BAIXO') as any,
-            reason: reasonMatch ? reasonMatch[1].trim() : 'Sem motivo especificado.',
-            affected_excerpt: excerptMatch ? excerptMatch[1].trim() : undefined,
-            suggested_update_instruction: instrMatch ? instrMatch[1].trim() : 'Atualizar conforme PRD.',
-          });
-        }
+    try {
+      const parsed = JSON.parse(articlesJsonStr);
+      if (Array.isArray(parsed)) {
+        affected_articles = parsed.map((item: any) => ({
+          articleId: item.ARTICLE_ID || '0',
+          title: item.TITLE || 'Sem título',
+          impact: (item.IMPACT?.toUpperCase() || 'BAIXO') as any,
+          reason: item.REASON || 'Sem motivo especificado.',
+          affected_excerpt: item.EXCERPT,
+          suggested_update_instruction: item.UPDATE_INSTRUCTION || 'Atualizar conforme PRD.',
+        }));
       }
+    } catch (e: any) {
+      this.logger.error(`Failed to parse affected_articles JSON: ${e.message}`);
     }
 
     return { summary, affected_articles };
@@ -175,8 +168,15 @@ export class AiService {
     });
 
     const text = result.text ?? '';
-    // Remove bloco <thinking> e retorna apenas o artigo em Markdown
-    return this.cleanThinkingTags(text);
+    // Remove bloco <thinking>
+    const cleanText = this.cleanThinkingTags(text);
+    const articleMatch = cleanText.match(/<article>([\s\S]*?)<\/article>/i);
+
+    if (articleMatch) {
+      return articleMatch[1].trim();
+    }
+
+    return cleanText;
   }
 
   // ─── REVISÃO DE ARTIGO ──────────────────────────────────────────────
@@ -191,12 +191,12 @@ export class AiService {
       this.logger.warn('╔════════════════════════════════════════════════════════════════════');
       this.logger.warn('║ INICIANDO REVISÃO DE ARTIGO (updateArticle)');
       this.logger.warn('╚════════════════════════════════════════════════════════════════════');
-      
+
       this.logger.log(`📝 Tamanho do artigo: ${currentContent.length} caracteres`);
       this.logger.log(`📝 Tamanho da instrução: ${whatToChange.length} caracteres`);
       this.logger.log(`📝 Instrução solicitada: "${whatToChange}"`);
 
-      const fullPrompt = `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}\n\nINSTRUÇÃO: Aplique as alterações no artigo e retorne EXATAMENTE no formato de blocos ---CONTENT_START--- e ---META_START--- definido nas instruções de sistema.`;
+      const fullPrompt = `ARTIGO ATUAL:\n${currentContent}\n\nALTERAÇÕES SOLICITADAS:\n${whatToChange}\n\nINSTRUÇÃO: Aplique as alterações no artigo e retorne EXATAMENTE no formato de blocos <revised_content> e <metadata> definido nas instruções de sistema.`;
       this.logger.log(`📊 Tamanho total do prompt (artigo + instrução): ${fullPrompt.length} caracteres`);
 
       // PRIMEIRA TENTATIVA: com systemInstruction
@@ -228,7 +228,7 @@ export class AiService {
       // SE RETORNOU VAZIO, TENTA SEGUNDA CHAMADA SEM systemInstruction
       if (!text) {
         this.logger.warn('⚠️  Gemini retornou vazio na tentativa #1. Tentando #2 SEM systemInstruction...');
-        
+
         // Prompt simplificado e direto
         const simplifiedPrompt = `Você é um revisor de artigos especializado em documentação técnica.
 
@@ -240,13 +240,13 @@ ${whatToChange}
 
 Faça as alterações solicitadas no artigo e retorne EXATAMENTE neste formato:
 
----CONTENT_START---
+<revised_content>
 [artigo revisado completo]
----CONTENT_END---
+</revised_content>
 
----META_START---
+<metadata>
 {"changes_summary": ["mudança 1", "mudança 2"], "style_violations_fixed": [], "assumptions": []}
----META_END---
+</metadata>
 
 Não adicione nenhum texto fora desses blocos.`;
 
@@ -279,61 +279,26 @@ Não adicione nenhum texto fora desses blocos.`;
 
       const cleanText = this.cleanThinkingTags(text);
       this.logger.debug(`Revisão bruta recebida: ${cleanText.slice(0, 200)}...`);
-      
-      // Extração robusta via delimitadores (insensível a case)
-      // Tenta múltiplas variações de regex para ser mais tolerante
-      let contentMatch: RegExpMatchArray | null = cleanText.match(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/i);
-      if (!contentMatch) {
-        // Fallback: tenta com quebras de linha diferentes
-        contentMatch = cleanText.match(/---CONTENT_START---\n([\s\S]*?)\n---CONTENT_END---/i);
-      }
-      if (!contentMatch) {
-        // Fallback: tenta sem os traços
-        contentMatch = cleanText.match(/CONTENT_START([\s\S]*?)CONTENT_END/i);
-      }
 
-      let revised_content = (contentMatch as RegExpMatchArray)?.[1]?.trim() ?? '';
-      
-      // Fallback robusto: se não encontrou delimitadores mas há conteúdo,
-      // tenta extrair a parte que parece Markdown (começa com # ou está entre META_END e fim)
+      // Extração robusta via delimitadores (insensível a case)
+      let contentMatch: RegExpMatchArray | null = cleanText.match(/<revised_content>([\s\S]*?)<\/revised_content>/i);
+      let revised_content = contentMatch?.[1]?.trim() ?? '';
+
+      // Fallback robusto: se não encontrou delimitadores mas há conteúdo
       if (!revised_content && cleanText.length > 100) {
-        this.logger.warn('Protocolo de blocos falhou, tentando fallback inteligente');
-        
-        // Tenta extrair tudo após META_END (que é o último bloco)
-        const metaEndIdx = cleanText.indexOf('---META_END---');
-        if (metaEndIdx > -1) {
-          // Há conteúdo antes do META_END, que é o artigo revisado
-          const beforeMetaEnd = cleanText.substring(0, metaEndIdx);
-          const contentEndIdx = beforeMetaEnd.lastIndexOf('---CONTENT_END---');
-          if (contentEndIdx > -1) {
-            const contentStartIdx = beforeMetaEnd.lastIndexOf('---CONTENT_START---');
-            if (contentStartIdx > -1) {
-              revised_content = beforeMetaEnd.substring(contentStartIdx + '---CONTENT_START---'.length, contentEndIdx).trim();
-            }
-          }
-        }
-        
-        // Último fallback: se ainda assim não encontrou, usa todo o cleanText
-        // mas remove blocos de metadados
+        this.logger.warn('Protocolo de blocos falhou, tentando fallback genérico bruto');
+        revised_content = cleanText
+          .replace(/<metadata>([\s\S]*?)<\/metadata>/i, '')
+          .trim();
+
         if (!revised_content) {
-          this.logger.warn('Usando fallback final: texto bruto sem delimitadores');
-          revised_content = cleanText
-            .replace(/---META_START---([\s\S]*?)---META_END---/i, '')
-            .replace(/---CONTENT_START---([\s\S]*?)---CONTENT_END---/i, '')
-            .trim();
-          // Se ainda está vazio, usa tudo
-          if (!revised_content) {
-            revised_content = cleanText;
-          }
+          revised_content = cleanText;
         }
       }
 
       // Extrai metadados
-      let metaMatch: RegExpMatchArray | null = cleanText.match(/---META_START---([\s\S]*?)---META_END---/i);
-      if (!metaMatch) {
-        metaMatch = cleanText.match(/---META_START---\n([\s\S]*?)\n---META_END---/i);
-      }
-      const metaText = (metaMatch as RegExpMatchArray)?.[1]?.trim() ?? '{}';
+      let metaMatch: RegExpMatchArray | null = cleanText.match(/<metadata>([\s\S]*?)<\/metadata>/i);
+      const metaText = metaMatch?.[1]?.trim() ?? '{}';
 
       try {
         const meta = this.extractJson<any>(metaText);
@@ -347,7 +312,7 @@ Não adicione nenhum texto fora desses blocos.`;
         this.logger.error(`Erro ao processar metadados da revisão: ${e.message}`);
         return {
           revised_content,
-          changes_summary: revised_content 
+          changes_summary: revised_content
             ? ['A revisão foi aplicada, mas houve um erro ao processar o resumo das mudanças.']
             : ['Erro: O modelo não retornou conteúdo válido.'],
           style_violations_fixed: [],
@@ -416,15 +381,15 @@ Não adicione nenhum texto fora desses blocos.`;
     });
 
     const text = result.text;
-    
+
     if (!text) {
       this.logger.warn('Gemini retornou texto vazio na análise de impacto.');
       return { affected_articles: [], summary: 'Não foi possível analisar o impacto' };
     }
-    
+
     const cleanText = this.cleanThinkingTags(text);
     this.logger.debug(`Relatório de impacto bruto: ${cleanText}`);
-    
+
     return this.parseImpactReport(cleanText);
   }
 
@@ -461,23 +426,22 @@ Não adicione nenhum texto fora desses blocos.`;
     const cleanText = this.cleanThinkingTags(text);
     this.logger.debug(`Verificação de impacto bruta: ${cleanText}`);
 
-    const metaMatch = cleanText.match(/---META_START---([\s\S]*?)---META_END---/);
-    const reasonMatch = cleanText.match(/---REASON_START---([\s\S]*?)---REASON_END---/);
-    const excerptMatch = cleanText.match(/---EXCERPT_START---([\s\S]*?)---EXCERPT_END---/);
-    const instrMatch = cleanText.match(/---INSTRUCTION_START---([\s\S]*?)---INSTRUCTION_END---/);
+    const evalMatch = cleanText.match(/<evaluation>([\s\S]*?)<\/evaluation>/i);
+    const evalText = evalMatch ? evalMatch[1].trim() : cleanText;
 
-    const metaText = metaMatch ? metaMatch[1].trim() : '{"confirmed":false}';
-    let meta: any = { confirmed: false, confidence: 'BAIXA' };
+    let evaluation: any = { confirmed: false, confidence: 'BAIXA' };
     try {
-      meta = this.extractJson<any>(metaText);
-    } catch { /* ignora erro de meta, usa default */ }
+      evaluation = this.extractJson<any>(evalText);
+    } catch {
+      this.logger.error('Failed to parse evaluation JSON');
+    }
 
     return {
-      confirmed: meta.confirmed ?? false,
-      confidence: meta.confidence ?? 'BAIXA',
-      reason: reasonMatch ? reasonMatch[1].trim() : 'Sem explicação.',
-      affected_excerpt: excerptMatch ? excerptMatch[1].trim() : null,
-      suggested_update_instruction: instrMatch ? instrMatch[1].trim() : null,
+      confirmed: evaluation.confirmed ?? false,
+      confidence: evaluation.confidence ?? 'BAIXA',
+      reason: evaluation.reason ?? 'Sem explicação.',
+      affected_excerpt: evaluation.excerpt ?? null,
+      suggested_update_instruction: evaluation.instruction ?? null,
     };
   }
 
@@ -503,7 +467,7 @@ Não adicione nenhum texto fora desses blocos.`;
     if (!content) {
       return { filtered_articles: [] };
     }
-    
+
     return this.extractJson<AgenticSearchResult>(content);
   }
 }
