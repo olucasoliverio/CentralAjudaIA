@@ -66,13 +66,17 @@ function markdownToHtml(markdown: string): string {
       if (inBlock) { result.push('</p>'); inBlock = false; }
       continue;
     }
-    const isBlock = trimmed.startsWith('<h') || trimmed.startsWith('<ul') ||
-      trimmed.startsWith('<ol') || trimmed.startsWith('<li') ||
-      trimmed.startsWith('<hr') || trimmed.startsWith('<img');
+    
+    // Identifica se a linha é o início/fim de um bloco HTML em nível de raiz
+    const isBlock = /^\s*<\/?(h\d|ul|ol|li|hr|img|pre|div|blockquote|table|thead|tbody|tr|td|th|style|script|iframe)(>|\s)/i.test(trimmed);
+    const isBr = /^<br\s*\/?>$/.test(trimmed);
 
     if (isBlock) {
       if (inBlock) { result.push('</p>'); inBlock = false; }
       result.push(trimmed);
+    } else if (isBr) {
+      // Ignora <br> isolados, deixamos o CSS (margin-bottom) dar o espaçamento adequado.
+      if (inBlock) { result.push('</p>'); inBlock = false; }
     } else if (!inBlock) {
       result.push(`<p>${trimmed}`);
       inBlock = true;
@@ -82,7 +86,12 @@ function markdownToHtml(markdown: string): string {
   }
   if (inBlock) result.push('</p>');
 
-  return result.join('\n');
+  // Limpa possíveis parágrafos vazios gerados inadvertidamente
+  let finalHtml = result.join('\n');
+  finalHtml = finalHtml.replace(/<p>\s*<\/p>/g, '');
+  finalHtml = finalHtml.replace(/<p>\s*<br\s*\/?>\s*<\/p>/g, '');
+
+  return finalHtml;
 }
 
 // ── Passo 2: Aplica estilos inline do Guia Next Fit ─────────────────────────
