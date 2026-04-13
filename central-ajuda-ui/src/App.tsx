@@ -76,7 +76,7 @@ function App() {
   ];
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${colorPaletteOpen ? 'palette-open' : ''}`}>
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
