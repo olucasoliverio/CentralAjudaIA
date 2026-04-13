@@ -19,6 +19,14 @@ interface ColorPaletteProps {
 
 const colorCategories: ColorCategory[] = [
   {
+    title: '📌 Freshdesk',
+    colors: [
+      { name: 'Roxo', hex: '#833AB4', description: 'Título e Atenção' },
+      { name: 'Cinza', hex: '#264966', description: 'Paragráfo e Subtítulo' },
+      { name: 'Vermelho', hex: '#B8312F', description: 'Observações' },
+    ],
+  },
+  {
     title: '📌 Módulos',
     colors: [
       { name: 'Roxo', hex: '#940DAC', description: 'Início, Desempenho' },
