@@ -2,10 +2,10 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001';
 
 async function request<T>(endpoint: string, body?: Record<string, unknown>): Promise<T> {
   const apiKey = localStorage.getItem('api-key') || '';
-  
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey
     },
@@ -122,11 +122,13 @@ export const api = {
   async validateKey(apiKeyToTest?: string): Promise<boolean> {
     const key = apiKeyToTest || localStorage.getItem('api-key') || '';
     try {
-      const res = await fetch(`${API_BASE}/`, {
+      const res = await fetch(`${API_BASE}/api/article/validate`, {
         method: 'GET',
         headers: { 'x-api-key': key }
       });
-      return res.ok;
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data?.valid === true;
     } catch {
       return false;
     }

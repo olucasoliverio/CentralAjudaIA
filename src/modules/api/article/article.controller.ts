@@ -1,4 +1,4 @@
-import { Controller, Post, Body, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, NotFoundException, Get } from '@nestjs/common';
 import { AiService, UpdateArticleResult, AnalyzeImpactResult } from '../../ai/ai.service';
 import { VectorDbService } from '../../vector-db/vector-db.service';
 import { RagService } from '../../rag/rag.service';
@@ -12,6 +12,11 @@ export class ArticleController {
     private readonly ragService: RagService,
     private readonly prisma: PrismaService,
   ) { }
+
+  @Get('validate')
+  validateAccess() {
+    return { valid: true };
+  }
 
   @Post('generate')
   async generateArticle(@Body() body: { prompt: string }) {
