@@ -18,17 +18,45 @@ export function Articles() {
   const [search, setSearch] = useState('');
 
   const fetchArticles = async (p = page, size = pageSize, s = search) => {
-    setLoading(true);
     setError('');
+
+    const cacheKey = (pageNum: number, pageSz: number, q?: string) => `articles_cache:${pageNum}:${pageSz}:${q || ''}`;
+
+    const key = cacheKey(p, size, s);
+    const cachedRaw = localStorage.getItem(key);
+    let hadCache = false;
+
+    if (cachedRaw) {
+      try {
+        const parsed = JSON.parse(cachedRaw) as { items: ArticleSummary[]; total: number; ts?: number };
+        setArticles(parsed.items);
+        setTotal(parsed.total);
+        setPage(p);
+        setPageSize(size);
+        hadCache = true;
+      } catch {
+        // ignore parse errors
+      }
+    } else {
+      setLoading(true);
+    }
+
     try {
       const offset = (p - 1) * size;
       const res = await api.listArticles(size, offset, s || undefined);
-      setArticles(res.items);
-      setTotal(res.total);
+
+      const prevJson = cachedRaw || '';
+      const newJson = JSON.stringify({ items: res.items, total: res.total });
+      if (newJson !== prevJson) {
+        localStorage.setItem(key, newJson);
+        setArticles(res.items);
+        setTotal(res.total);
+      }
+
       setPage(p);
       setPageSize(size);
     } catch (err: any) {
-      setError(err?.message || 'Erro ao buscar artigos');
+      if (!hadCache) setError(err?.message || 'Erro ao buscar artigos');
     } finally {
       setLoading(false);
     }
