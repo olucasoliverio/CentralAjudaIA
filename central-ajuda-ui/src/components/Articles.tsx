@@ -186,13 +186,13 @@ export function Articles() {
           <div className="empty-state">Nenhum artigo encontrado.</div>
         ) : (
           <div className="panel" style={{ overflowX: 'auto' }}>
-            <table className="table" style={{ width: '100%', maxWidth: '1200px', tableLayout: 'fixed' }}>
+            <table className="table" style={{ width: '100%', maxWidth: '1200px', tableLayout: 'center' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '45%' }}>Título</th>
+                  <th style={{ width: '55%' }}>Título</th>
                   <th style={{ width: '15%' }}>Freshdesk</th>
                   <th style={{ width: '20%' }}>Atualizado Em</th>
-                  <th style={{ width: '20%' }}>Ações</th>
+                  <th style={{ width: '10%' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
