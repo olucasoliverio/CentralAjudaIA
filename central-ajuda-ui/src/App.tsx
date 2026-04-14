@@ -103,13 +103,6 @@ function App() {
           <button className="btn btn-theme-toggle" onClick={toggleTheme}>
             {theme === 'light' ? 'Modo Escuro' : 'Modo Claro'}
           </button>
-          <button
-            className={`btn btn-sync ${syncing ? 'syncing' : ''}`}
-            onClick={handleSync}
-            disabled={syncing}
-          >
-            {syncing ? 'Sincronizando...' : 'Sincronizar Base'}
-          </button>
           <button className="btn btn-ghost" onClick={handleLogout} style={{ marginTop: '4px' }}>
             Sair do Sistema
           </button>
