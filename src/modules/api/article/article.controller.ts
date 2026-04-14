@@ -1,4 +1,5 @@
 import { Controller, Post, Body, NotFoundException, Get } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AiService, UpdateArticleResult, AnalyzeImpactResult } from '../../ai/ai.service';
 import { VectorDbService } from '../../vector-db/vector-db.service';
 import { RagService } from '../../rag/rag.service';
@@ -27,11 +28,11 @@ export class ArticleController {
     const where = search
       ? {
           OR: [
-            { title: { contains: search, mode: 'insensitive' } },
+            { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
             { freshdeskId: { contains: search } },
           ],
-        }
-      : {};
+        } as Prisma.ArticleWhereInput
+      : {} as Prisma.ArticleWhereInput;
 
     const [articles, total] = await Promise.all([
       this.prisma.article.findMany({
