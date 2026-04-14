@@ -186,7 +186,7 @@ export function Articles() {
           <div className="empty-state">Nenhum artigo encontrado.</div>
         ) : (
           <div className="panel" style={{ overflowX: 'auto' }}>
-            <table className="table" style={{ width: '100%', maxWidth: '1200px', tableLayout: 'center' }}>
+            <table className="table" style={{ width: '100%', maxWidth: '1200px', tableLayout: 'auto' }}>
               <thead>
                 <tr>
                   <th style={{ width: '55%' }}>Título</th>
