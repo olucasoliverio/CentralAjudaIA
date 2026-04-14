@@ -100,26 +100,7 @@ export function Articles() {
     setSelectedArticle(null);
   };
 
-  const stripMarkdownToText = (s?: string) => {
-    if (!s) return '';
-    let t = s;
-    // remove image markdown ![alt](url)
-    t = t.replace(/!\[[^\]]*\]\([^\)]*\)/g, '');
-    // replace links [text](url) -> text
-    t = t.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
-    // remove html tags
-    t = t.replace(/<[^>]+>/g, '');
-    // remove remaining markdown chars
-    t = t.replace(/[*_`>#\-]{1,3}/g, '');
-    // collapse spaces
-    t = t.replace(/\s+/g, ' ').trim();
-    return t;
-  };
-
-  const truncate = (s?: string, n = 300) => {
-    const t = stripMarkdownToText(s);
-    return t.length > n ? t.slice(0, n) + '...' : t;
-  };
+  // truncate/strip helpers removed — description column no longer shown in list
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -159,20 +140,34 @@ export function Articles() {
       {error && <div className="status-error" style={{ marginTop: 12 }}>{error}</div>}
 
       <section style={{ marginTop: 16 }}>
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+        <form
+          onSubmit={handleSearchSubmit}
+          style={{
+            display: 'flex',
+            gap: 8,
+            margin: '0 auto 12px',
+            alignItems: 'center',
+            width: '100%',
+            maxWidth: 1100,
+          }}
+        >
           <input
             placeholder="Pesquisar por título ou ID"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 200, padding: '8px 10px' }}
           />
-          <select value={pageSize} onChange={(e) => handlePageSizeChange(Number(e.target.value))}>
+          <select
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+            style={{ width: 100, padding: '8px 6px' }}
+          >
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <button className="btn btn-primary" onClick={() => handleSearchSubmit()} disabled={loading}>
+          <button className="btn btn-primary" type="button" onClick={() => handleSearchSubmit()} disabled={loading} style={{ minWidth: 90 }}>
             Buscar
           </button>
         </form>
@@ -184,11 +179,10 @@ export function Articles() {
             <table className="table" style={{ width: '100%', maxWidth: '1100px', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '28%' }}>Título</th>
-                  <th style={{ width: '18%' }}>Freshdesk</th>
-                  <th style={{ width: '40%' }}>Descrição</th>
-                  <th style={{ width: '14%' }}>Atualizado Em</th>
-                  <th style={{ width: '10%' }}>Ações</th>
+                  <th style={{ width: '45%' }}>Título</th>
+                  <th style={{ width: '20%' }}>Freshdesk</th>
+                  <th style={{ width: '20%' }}>Atualizado Em</th>
+                  <th style={{ width: '15%' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -205,7 +199,6 @@ export function Articles() {
                         {a.freshdeskId}
                       </a>
                     </td>
-                    <td style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{truncate(a.description, 300)}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>{new Date(a.updatedAt).toLocaleString()}</td>
                     <td>
                       <button className="btn btn-ghost" onClick={() => openArticle(a.id)}>Abrir</button>
