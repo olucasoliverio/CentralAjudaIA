@@ -72,9 +72,9 @@ function App() {
   const navItems: { key: Page; label: string }[] = [
     { key: 'impact', label: 'Análise de Impacto' },
     { key: 'search', label: 'Busca Semântica' },
-    { key: 'articles', label: 'Artigos' },
     { key: 'generator', label: 'Gerador de Artigos' },
     { key: 'reviewer', label: 'Revisor de Artigos' },
+    { key: 'articles', label: 'Artigos' },
   ];
 
   return (
@@ -82,7 +82,7 @@ function App() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <h2>Next Fit AI</h2>
+          <h2>Olive Articles AI</h2>
           <p>Central de Ajuda</p>
         </div>
 

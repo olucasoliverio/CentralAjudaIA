@@ -62,6 +62,7 @@ export interface ArticleSummary {
   category?: string | null;
   tags: string[];
   updatedAt: string;
+  description?: string;
 }
 
 export interface GenerateResult {
@@ -130,6 +131,10 @@ export const api = {
 
   listArticles(limit?: number, offset?: number) {
     return request<ArticleSummary[]>('/api/article/list', { limit, offset });
+  },
+
+  getArticle(params: { articleId?: string; freshdeskId?: string }) {
+    return request<ArticleSummary>('/api/article/get', params);
   },
 
   async validateKey(apiKeyToTest?: string): Promise<boolean> {

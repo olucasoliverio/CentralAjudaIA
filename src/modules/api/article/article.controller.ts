@@ -34,10 +34,36 @@ export class ArticleController {
         category: true,
         tags: true,
         updatedAt: true,
+        description: true,
       },
     });
 
     return articles;
+  }
+
+  @Post('get')
+  async getArticle(@Body() body: { articleId?: string; freshdeskId?: string }) {
+    if (!body.articleId && !body.freshdeskId) {
+      throw new NotFoundException('Forneça articleId ou freshdeskId');
+    }
+
+    const where = body.articleId ? { id: body.articleId } : { freshdeskId: body.freshdeskId?.toString() };
+
+    const article = await this.prisma.article.findFirst({
+      where,
+      select: {
+        id: true,
+        freshdeskId: true,
+        title: true,
+        category: true,
+        tags: true,
+        updatedAt: true,
+        description: true,
+      },
+    });
+
+    if (!article) throw new NotFoundException('Artigo não encontrado');
+    return article;
   }
 
   @Post('generate')
