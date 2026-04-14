@@ -33,17 +33,17 @@ export function Login({ onLogin }: Props) {
       <div className="login-card animate-in">
         <div className="login-header">
           <div className="login-logo-placeholder"></div>
-          <h2>Next Fit AI</h2>
-          <p>Abertura de Sessão Restrita</p>
+          <h2>Olive Articles AI</h2>
+          <p>Central de Ajuda Inteligente</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="input-group">
-            <label htmlFor="api-key">Chave de Acesso da API (Vertex/Gemini)</label>
+            <label htmlFor="api-key">Insira a senha</label>
             <input
               id="api-key"
               type="password"
-              placeholder="Ex: AIzaSy..."
+              placeholder="Digite a senha aqui"
               value={key}
               onChange={(e) => {
                 setKey(e.target.value);
