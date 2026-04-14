@@ -150,7 +150,7 @@ export function Articles() {
             gap: 8,
             margin: '0 auto 12px',
             alignItems: 'center',
-            width: '110%',
+            width: '100%',
             maxWidth: 1100,
           }}
         >
