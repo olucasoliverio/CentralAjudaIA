@@ -118,7 +118,7 @@ export function Articles() {
           <p>Lista de artigos presentes no banco de dados.</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-primary" onClick={fetchArticles} disabled={loading}>
+          <button className="btn btn-primary" onClick={() => fetchArticles()} disabled={loading}>
             {loading ? 'Carregando...' : 'Atualizar Lista'}
           </button>
           <button className={`btn btn-sync ${syncing ? 'syncing' : ''}`} onClick={handleSync} disabled={syncing}>
