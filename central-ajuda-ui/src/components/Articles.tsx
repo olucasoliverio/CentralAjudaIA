@@ -13,7 +13,7 @@ export function Articles() {
   const [selectedArticle, setSelectedArticle] = useState<ArticleSummary | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
 
