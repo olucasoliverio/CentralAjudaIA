@@ -45,11 +45,14 @@ export function Articles() {
       const offset = (p - 1) * size;
       const res = await api.listArticles(size, offset, s || undefined);
 
+      // strip description from items to avoid showing/storing full article body in list cache
+      const itemsStripped = res.items.map(({ description, ...rest }) => rest as ArticleSummary);
+
       const prevJson = cachedRaw || '';
-      const newJson = JSON.stringify({ items: res.items, total: res.total });
+      const newJson = JSON.stringify({ items: itemsStripped, total: res.total });
       if (newJson !== prevJson) {
         localStorage.setItem(key, newJson);
-        setArticles(res.items);
+        setArticles(itemsStripped);
         setTotal(res.total);
       }
 
@@ -155,19 +158,26 @@ export function Articles() {
             placeholder="Pesquisar por título ou ID"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ flex: 1, minWidth: 200, padding: '8px 10px' }}
+            style={{
+              flex: 1,
+              minWidth: 200,
+              padding: '8px 10px',
+              border: '1px solid rgba(0,0,0,0.08)',
+              borderRadius: 8,
+              background: 'var(--bg-input, #fff)'
+            }}
           />
           <select
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-            style={{ width: 100, padding: '8px 6px' }}
+            style={{ width: 100, padding: '8px 6px', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, background: 'var(--bg-input, #fff)' }}
           >
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <button className="btn btn-primary" type="button" onClick={() => handleSearchSubmit()} disabled={loading} style={{ minWidth: 90 }}>
+          <button className="btn btn-primary" type="button" onClick={() => handleSearchSubmit()} disabled={loading} style={{ minWidth: 90, borderRadius: 8 }}>
             Buscar
           </button>
         </form>

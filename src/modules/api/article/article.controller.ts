@@ -47,7 +47,6 @@ export class ArticleController {
           category: true,
           tags: true,
           updatedAt: true,
-          description: true,
         },
       }),
       this.prisma.article.count({ where }),
