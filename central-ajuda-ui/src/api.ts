@@ -129,8 +129,8 @@ export const api = {
     return request<{ message: string }>('/api/sync-articles');
   },
 
-  listArticles(limit?: number, offset?: number) {
-    return request<ArticleSummary[]>('/api/article/list', { limit, offset });
+  listArticles(limit?: number, offset?: number, search?: string) {
+    return request<{ items: ArticleSummary[]; total: number }>('/api/article/list', { limit, offset, search });
   },
 
   getArticle(params: { articleId?: string; freshdeskId?: string }) {

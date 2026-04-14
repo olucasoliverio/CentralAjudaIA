@@ -19,26 +19,40 @@ export class ArticleController {
   }
 
   @Post('list')
-  async listArticles(@Body() body: { limit?: number; offset?: number } = {}) {
+  async listArticles(@Body() body: { limit?: number; offset?: number; search?: string } = {}) {
     const limit = body.limit ?? 200;
     const offset = body.offset ?? 0;
+    const search = body.search?.trim();
 
-    const articles = await this.prisma.article.findMany({
-      skip: offset,
-      take: limit,
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        freshdeskId: true,
-        title: true,
-        category: true,
-        tags: true,
-        updatedAt: true,
-        description: true,
-      },
-    });
+    const where = search
+      ? {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { freshdeskId: { contains: search } },
+          ],
+        }
+      : {};
 
-    return articles;
+    const [articles, total] = await Promise.all([
+      this.prisma.article.findMany({
+        where,
+        skip: offset,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          freshdeskId: true,
+          title: true,
+          category: true,
+          tags: true,
+          updatedAt: true,
+          description: true,
+        },
+      }),
+      this.prisma.article.count({ where }),
+    ]);
+
+    return { items: articles, total };
   }
 
   @Post('get')

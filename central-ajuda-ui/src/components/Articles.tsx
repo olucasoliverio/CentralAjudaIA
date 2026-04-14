@@ -12,13 +12,21 @@ export function Articles() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<ArticleSummary | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
 
-  const fetchArticles = async () => {
+  const fetchArticles = async (p = page, size = pageSize, s = search) => {
     setLoading(true);
     setError('');
     try {
-      const data = await api.listArticles(200, 0);
-      setArticles(data);
+      const offset = (p - 1) * size;
+      const res = await api.listArticles(size, offset, s || undefined);
+      setArticles(res.items);
+      setTotal(res.total);
+      setPage(p);
+      setPageSize(size);
     } catch (err: any) {
       setError(err?.message || 'Erro ao buscar artigos');
     } finally {
@@ -27,7 +35,8 @@ export function Articles() {
   };
 
   useEffect(() => {
-    fetchArticles();
+    fetchArticles(1, pageSize, '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSync = async () => {
@@ -63,9 +72,42 @@ export function Articles() {
     setSelectedArticle(null);
   };
 
-  const truncate = (s?: string, n = 300) => {
+  const stripMarkdownToText = (s?: string) => {
     if (!s) return '';
-    return s.length > n ? s.slice(0, n) + '...' : s;
+    let t = s;
+    // remove image markdown ![alt](url)
+    t = t.replace(/!\[[^\]]*\]\([^\)]*\)/g, '');
+    // replace links [text](url) -> text
+    t = t.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+    // remove html tags
+    t = t.replace(/<[^>]+>/g, '');
+    // remove remaining markdown chars
+    t = t.replace(/[*_`>#\-]{1,3}/g, '');
+    // collapse spaces
+    t = t.replace(/\s+/g, ' ').trim();
+    return t;
+  };
+
+  const truncate = (s?: string, n = 300) => {
+    const t = stripMarkdownToText(s);
+    return t.length > n ? t.slice(0, n) + '...' : t;
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    fetchArticles(newPage, pageSize, search);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    fetchArticles(1, newSize, search);
+  };
+
+  const handleSearchSubmit = (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
+    fetchArticles(1, pageSize, search);
   };
 
   return (
@@ -88,45 +130,80 @@ export function Articles() {
       {message && <div className="status-ok" style={{ marginTop: 12 }}>{message}</div>}
       {error && <div className="status-error" style={{ marginTop: 12 }}>{error}</div>}
 
-      <section style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <section style={{ marginTop: 16 }}>
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <input
+            placeholder="Pesquisar por título ou ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <select value={pageSize} onChange={(e) => handlePageSizeChange(Number(e.target.value))}>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <button className="btn btn-primary" onClick={() => handleSearchSubmit()} disabled={loading}>
+            Buscar
+          </button>
+        </form>
+
         {!articles || articles.length === 0 ? (
           <div className="empty-state">Nenhum artigo encontrado.</div>
         ) : (
-          articles.map(a => (
-            <div key={a.id} className="panel" style={{ maxWidth: 900 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: 0 }}>{a.title}</h3>
-                  <div style={{ color: 'var(--text-muted)', marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <span>Updated: {new Date(a.updatedAt).toLocaleString()}</span>
-                    <span>•</span>
-                    <a
-                      href={`https://sistemanextfit.freshdesk.com/support/solutions/articles/${a.freshdeskId}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="link"
-                    >
-                      Freshdesk: {a.freshdeskId}
-                    </a>
-                    <span>•</span>
-                    <span>{a.category || '-'}</span>
-                    <span>•</span>
-                    <span>{(a.tags || []).slice(0, 5).join(', ')}</span>
-                  </div>
+          <div className="panel" style={{ overflowX: 'auto' }}>
+            <table className="table" style={{ width: '100%', maxWidth: '1100px', tableLayout: 'fixed' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '28%' }}>Título</th>
+                  <th style={{ width: '18%' }}>Freshdesk</th>
+                  <th style={{ width: '40%' }}>Descrição</th>
+                  <th style={{ width: '14%' }}>Atualizado Em</th>
+                  <th style={{ width: '10%' }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {articles.map(a => (
+                  <tr key={a.id}>
+                    <td style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{a.title}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <a
+                        href={`https://sistemanextfit.freshdesk.com/support/solutions/articles/${a.freshdeskId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="link"
+                      >
+                        {a.freshdeskId}
+                      </a>
+                    </td>
+                    <td style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{truncate(a.description, 300)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{new Date(a.updatedAt).toLocaleString()}</td>
+                    <td>
+                      <button className="btn btn-ghost" onClick={() => openArticle(a.id)}>Abrir</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-                  <div style={{ marginTop: 12 }}>
-                    <ReactMarkdown>{truncate(a.description, 400)}</ReactMarkdown>
-                  </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+              <div style={{ color: 'var(--text-muted)' }}>
+                Mostrando {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} de {total}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>Anterior</button>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <button className="btn btn-ghost" onClick={() => handlePageChange(1)} disabled={page === 1}>1</button>
+                  {page > 2 && <span style={{ padding: '0 6px' }}>…</span>}
+                  <button className="btn btn-ghost" onClick={() => handlePageChange(page)} disabled>{page}</button>
+                  {page < totalPages - 1 && <span style={{ padding: '0 6px' }}>…</span>}
+                  <button className="btn btn-ghost" onClick={() => handlePageChange(totalPages)} disabled={page === totalPages}>{totalPages}</button>
                 </div>
-
-                <div style={{ marginLeft: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button className="btn btn-ghost" onClick={() => openArticle(a.id)}>
-                    Abrir
-                  </button>
-                </div>
+                <button className="btn btn-ghost" onClick={() => handlePageChange(page + 1)} disabled={page >= totalPages}>Próxima</button>
               </div>
             </div>
-          ))
+          </div>
         )}
       </section>
 
