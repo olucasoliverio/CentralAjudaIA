@@ -4,11 +4,12 @@ import { ImpactAnalyzer } from './components/ImpactAnalyzer';
 import { SemanticSearch } from './components/SemanticSearch';
 import { ArticleGenerator } from './components/ArticleGenerator';
 import { ArticleReviewer } from './components/ArticleReviewer';
+import { Articles } from './components/Articles';
 import { ColorPalette } from './components/ColorPalette';
 import { Login } from './Login';
 import { api } from './api';
 
-type Page = 'impact' | 'search' | 'generator' | 'reviewer';
+type Page = 'impact' | 'search' | 'generator' | 'reviewer' | 'articles';
 type Theme = 'light' | 'dark';
 
 function useTheme() {
@@ -71,6 +72,7 @@ function App() {
   const navItems: { key: Page; label: string }[] = [
     { key: 'impact', label: 'Análise de Impacto' },
     { key: 'search', label: 'Busca Semântica' },
+    { key: 'articles', label: 'Artigos' },
     { key: 'generator', label: 'Gerador de Artigos' },
     { key: 'reviewer', label: 'Revisor de Artigos' },
   ];
@@ -122,6 +124,7 @@ function App() {
         <div className="main-inner">
           {currentPage === 'impact' && <ImpactAnalyzer onTogglePalette={() => setColorPaletteOpen(true)} />}
           {currentPage === 'search' && <SemanticSearch />}
+          {currentPage === 'articles' && <Articles />}
           {currentPage === 'generator' && <ArticleGenerator onTogglePalette={() => setColorPaletteOpen(true)} />}
           {currentPage === 'reviewer' && <ArticleReviewer />}
         </div>

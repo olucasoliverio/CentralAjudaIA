@@ -18,6 +18,28 @@ export class ArticleController {
     return { valid: true };
   }
 
+  @Post('list')
+  async listArticles(@Body() body: { limit?: number; offset?: number } = {}) {
+    const limit = body.limit ?? 200;
+    const offset = body.offset ?? 0;
+
+    const articles = await this.prisma.article.findMany({
+      skip: offset,
+      take: limit,
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        freshdeskId: true,
+        title: true,
+        category: true,
+        tags: true,
+        updatedAt: true,
+      },
+    });
+
+    return articles;
+  }
+
   @Post('generate')
   async generateArticle(@Body() body: { prompt: string }) {
     // 1. Constrói contexto RAG com re-ranking inteligente

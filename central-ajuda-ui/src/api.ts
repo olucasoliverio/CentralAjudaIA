@@ -55,6 +55,15 @@ export interface SearchResult {
   title: string;
 }
 
+export interface ArticleSummary {
+  id: string;
+  freshdeskId: string;
+  title: string;
+  category?: string | null;
+  tags: string[];
+  updatedAt: string;
+}
+
 export interface GenerateResult {
   generated_content: string;
   sources: { id: string; title: string }[];
@@ -117,6 +126,10 @@ export const api = {
 
   syncArticles() {
     return request<{ message: string }>('/api/sync-articles');
+  },
+
+  listArticles(limit?: number, offset?: number) {
+    return request<ArticleSummary[]>('/api/article/list', { limit, offset });
   },
 
   async validateKey(apiKeyToTest?: string): Promise<boolean> {
