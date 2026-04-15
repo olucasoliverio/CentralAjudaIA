@@ -29,10 +29,10 @@ export function Login({ onLogin }: Props) {
   return (
     <div className="login-container">
       <div className="login-ambient" />
-      
+
       <div className="login-card animate-in">
         <div className="login-header">
-          <div className="login-logo-placeholder"></div>
+          <div className="login-logo"> <img src="/public/Icon.png"></img></div>
           <h2>Olive Articles AI</h2>
           <p>Central de Ajuda Inteligente</p>
         </div>
