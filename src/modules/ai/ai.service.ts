@@ -203,8 +203,8 @@ export class AiService {
       return '';
     }
 
-    // Remove bloco <thinking>
-    const cleanText = this.cleanThinkingTags(text);
+    // Remove bloco <thinking> convencional
+    let cleanText = this.cleanThinkingTags(text);
     const articleMatch = cleanText.match(/<article>([\s\S]*?)<\/article>/i);
 
     if (articleMatch) {
@@ -212,11 +212,26 @@ export class AiService {
       this.logger.log(`Tamanho do extrato dentro de <article>: ${extracted.length} caracteres.`);
       if (extracted.length > 0) {
         return extracted;
-      } else {
-        this.logger.warn(`Tag <article> estava VAZIA! Retornando o cleanText bruto.`);
       }
     }
 
+    // Fallback de parse: Caso o LLM tenha omitido a tag </thinking> e a tag <article> e colapsado tudo.
+    // O guia de estilo OBRIGA o artigo a começar com "Olá! Neste tutorial".
+    // Buscamos a ÚLTIMA ocorrência de "Olá!" para escapar de menções dentro do bloco de pensamento.
+    const lastOlaIndex = cleanText.lastIndexOf('Olá!');
+    if (lastOlaIndex !== -1 && cleanText.includes('<thinking>')) {
+      const fallbackExtract = cleanText.substring(lastOlaIndex).trim();
+      this.logger.log(`Tags omitidas e texto misturado. Extraído pelo index de Olá!: ${fallbackExtract.length} chars.`);
+      return fallbackExtract;
+    }
+
+    // Se a tag <article> não existir e não conter <thinking>, apenas remover tudo do inicio ate "Olá!" se existir
+    if (lastOlaIndex !== -1 && lastOlaIndex > 0 && lastOlaIndex < cleanText.length / 2) {
+      // Se "Olá!" ocorre razoavelmente perto do começo mas nao ta misturado com <thinking>, podemos ou não querer cortar
+      // É mais seguro deixar o texto como está se não houver tag <thinking>
+    }
+
+    this.logger.warn(`Tag <article> estava VAZIA ou não encontrada! Retornando o cleanText bruto.`);
     return cleanText;
   }
 
