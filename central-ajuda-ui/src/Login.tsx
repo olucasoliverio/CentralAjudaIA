@@ -32,7 +32,7 @@ export function Login({ onLogin }: Props) {
 
       <div className="login-card animate-in">
         <div className="login-header">
-          <div className="login-logo"> <img src="../public/Icon.png"></img></div>
+          <div className="login-logo"> <img src="/Icon.png"></img></div>
           <h2>Olive Articles AI</h2>
           <p>Central de Ajuda Inteligente</p>
         </div>
