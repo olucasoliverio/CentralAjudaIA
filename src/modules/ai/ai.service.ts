@@ -158,6 +158,9 @@ export class AiService {
 
     const systemInstruction = GENERATE_ARTICLE_SYSTEM_PROMPT.replace('{context}', context);
 
+    this.logger.log('Iniciando generateArticleRAG...');
+    this.logger.debug(`Prompt original enviado: ${prompt}`);
+
     const result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: `DADOS BRUTOS / PRD (fonte de verdade):\n${prompt}\n\n---\n\nINSTRUÇÃO: Gere um artigo completo para a Central de Ajuda Next Fit seguindo EXATAMENTE o padrão do guia de estilo. Baseie-se nas referências abaixo apenas para ESTRUTURA e VOCABULÁRIO, nunca para copiar paths ou regras de negócio. Tudo o que você precisa saber sobre a funcionalidade está nos DADOS BRUTOS acima.`,
@@ -167,13 +170,32 @@ export class AiService {
       },
     });
 
-    const text = result.text ?? '';
+    let text = result.text ?? '';
+    const candidates = (result as any).candidates || [];
+    if (!text && candidates.length > 0 && candidates[0].content?.parts?.length > 0) {
+      text = candidates[0].content.parts.map((p: any) => p.text || '').join('');
+    }
+
+    this.logger.log(`Tamanho do texto retornado pelo LLM: ${text.length} caracteres`);
+    this.logger.debug(`Texto Bruto LLM: ${text}`);
+
+    if (!text || text.trim() === '') {
+      this.logger.warn('⚠️ Gemini retornou texto VAZIO! Verifique os Safety filters ou falha do prompt.');
+      return '';
+    }
+
     // Remove bloco <thinking>
     const cleanText = this.cleanThinkingTags(text);
     const articleMatch = cleanText.match(/<article>([\s\S]*?)<\/article>/i);
 
     if (articleMatch) {
-      return articleMatch[1].trim();
+      const extracted = articleMatch[1].trim();
+      this.logger.log(`Tamanho do extrato dentro de <article>: ${extracted.length} caracteres.`);
+      if (extracted.length > 0) {
+        return extracted;
+      } else {
+        this.logger.warn(`Tag <article> estava VAZIA! Retornando o cleanText bruto.`);
+      }
     }
 
     return cleanText;
