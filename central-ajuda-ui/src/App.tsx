@@ -7,7 +7,6 @@ import { ArticleReviewer } from './components/ArticleReviewer';
 import { Articles } from './components/Articles';
 import { ColorPalette } from './components/ColorPalette';
 import { Login } from './Login';
-import { api } from './api';
 
 type Page = 'impact' | 'search' | 'generator' | 'reviewer' | 'articles';
 type Theme = 'light' | 'dark';
@@ -30,8 +29,6 @@ function useTheme() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('api-key'));
   const [currentPage, setCurrentPage] = useState<Page>('impact');
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
   const [colorPaletteOpen, setColorPaletteOpen] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -54,20 +51,6 @@ function App() {
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
   }
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncMessage('');
-    try {
-      const data = await api.syncArticles();
-      setSyncMessage(data.message || 'Sincronização iniciada.');
-    } catch {
-      setSyncMessage('Erro ao iniciar sincronização.');
-    } finally {
-      setSyncing(false);
-      setTimeout(() => setSyncMessage(''), 4000);
-    }
-  };
 
   const navItems: { key: Page; label: string }[] = [
     { key: 'impact', label: 'Análise de Impacto' },
@@ -106,9 +89,6 @@ function App() {
           <button className="btn btn-ghost" onClick={handleLogout} style={{ marginTop: '4px' }}>
             Sair do Sistema
           </button>
-          {syncMessage && (
-            <span className="sync-message animate-in">{syncMessage}</span>
-          )}
         </div>
       </aside>
 
