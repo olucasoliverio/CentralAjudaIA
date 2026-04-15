@@ -161,7 +161,7 @@ export class AiService {
     this.logger.log('Iniciando generateArticleRAG...');
     this.logger.debug(`Prompt original enviado: ${prompt}`);
 
-    const result = await this.ai.models.generateContent({
+    let result = await this.ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: `DADOS BRUTOS / PRD (fonte de verdade):\n${prompt}\n\n---\n\nINSTRUÇÃO: Gere um artigo completo para a Central de Ajuda Next Fit seguindo EXATAMENTE o padrão do guia de estilo. Baseie-se nas referências abaixo apenas para ESTRUTURA e VOCABULÁRIO, nunca para copiar paths ou regras de negócio. Tudo o que você precisa saber sobre a funcionalidade está nos DADOS BRUTOS acima.`,
       config: {
@@ -171,16 +171,35 @@ export class AiService {
     });
 
     let text = result.text ?? '';
-    const candidates = (result as any).candidates || [];
+    let candidates = (result as any).candidates || [];
     if (!text && candidates.length > 0 && candidates[0].content?.parts?.length > 0) {
       text = candidates[0].content.parts.map((p: any) => p.text || '').join('');
+    }
+
+    if (!text || text.trim() === '') {
+      this.logger.warn('⚠️ Gemini retornou texto VAZIO na tentativa 1. O Vertex AI pode ter bloqueado o systemInstruction. Tentando fallback...');
+      
+      // Fallback: move o systemInstruction para o "contents" diretamente
+      result = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `INSTRUÇÕES GERAIS E GUIA DE ESTILO:\n${systemInstruction}\n\n---\n\nDADOS BRUTOS / PRD:\n${prompt}\n\n---\n\nINSTRUÇÃO: Gere o artigo conforme pedido.`,
+        config: {
+          temperature: 0.2,
+        },
+      });
+
+      text = result.text ?? '';
+      candidates = (result as any).candidates || [];
+      if (!text && candidates.length > 0 && candidates[0].content?.parts?.length > 0) {
+        text = candidates[0].content.parts.map((p: any) => p.text || '').join('');
+      }
     }
 
     this.logger.log(`Tamanho do texto retornado pelo LLM: ${text.length} caracteres`);
     this.logger.debug(`Texto Bruto LLM: ${text}`);
 
     if (!text || text.trim() === '') {
-      this.logger.warn('⚠️ Gemini retornou texto VAZIO! Verifique os Safety filters ou falha do prompt.');
+      this.logger.error('❌ Gemini retornou texto VAZIO mesmo no fallback! Verifique os Safety filters na Google Cloud.');
       return '';
     }
 
